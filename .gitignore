@@ -53,8 +53,8 @@ dkms.conf
 
 /rawscantest
 CMakeFiles/
-/liblibrawscan.so
+/librawscan.so
 /random_line_generator
 /cmake_install.cmake
-/Makefile
+Makefile
 /CMakeCache.txt
