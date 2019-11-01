@@ -56,17 +56,6 @@ CMAKE_BINARY_DIR = /home/pj/etc/rawscan
 #=============================================================================
 # Targets provided globally by CMake.
 
-# Special rule for the target rebuild_cache
-rebuild_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
-.PHONY : rebuild_cache
-
-# Special rule for the target rebuild_cache
-rebuild_cache/fast: rebuild_cache
-
-.PHONY : rebuild_cache/fast
-
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
@@ -77,6 +66,17 @@ edit_cache:
 edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
+
+# Special rule for the target rebuild_cache
+rebuild_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
+	/usr/bin/cmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : rebuild_cache
+
+# Special rule for the target rebuild_cache
+rebuild_cache/fast: rebuild_cache
+
+.PHONY : rebuild_cache/fast
 
 # The main all target
 all: cmake_check_build_system
@@ -124,17 +124,17 @@ random_line_generator/fast:
 .PHONY : random_line_generator/fast
 
 #=============================================================================
-# Target rules for targets named librawscan
+# Target rules for targets named rawscan
 
 # Build rule for target.
-librawscan: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 librawscan
-.PHONY : librawscan
+rawscan: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 rawscan
+.PHONY : rawscan
 
 # fast build rule for target.
-librawscan/fast:
-	$(MAKE) -f CMakeFiles/librawscan.dir/build.make CMakeFiles/librawscan.dir/build
-.PHONY : librawscan/fast
+rawscan/fast:
+	$(MAKE) -f CMakeFiles/rawscan.dir/build.make CMakeFiles/rawscan.dir/build
+.PHONY : rawscan/fast
 
 #=============================================================================
 # Target rules for targets named rawscantest
@@ -155,7 +155,7 @@ lib/rawscan.o: lib/rawscan.c.o
 
 # target to build an object file
 lib/rawscan.c.o:
-	$(MAKE) -f CMakeFiles/librawscan.dir/build.make CMakeFiles/librawscan.dir/lib/rawscan.c.o
+	$(MAKE) -f CMakeFiles/rawscan.dir/build.make CMakeFiles/rawscan.dir/lib/rawscan.c.o
 .PHONY : lib/rawscan.c.o
 
 lib/rawscan.i: lib/rawscan.c.i
@@ -164,7 +164,7 @@ lib/rawscan.i: lib/rawscan.c.i
 
 # target to preprocess a source file
 lib/rawscan.c.i:
-	$(MAKE) -f CMakeFiles/librawscan.dir/build.make CMakeFiles/librawscan.dir/lib/rawscan.c.i
+	$(MAKE) -f CMakeFiles/rawscan.dir/build.make CMakeFiles/rawscan.dir/lib/rawscan.c.i
 .PHONY : lib/rawscan.c.i
 
 lib/rawscan.s: lib/rawscan.c.s
@@ -173,7 +173,7 @@ lib/rawscan.s: lib/rawscan.c.s
 
 # target to generate assembly for a file
 lib/rawscan.c.s:
-	$(MAKE) -f CMakeFiles/librawscan.dir/build.make CMakeFiles/librawscan.dir/lib/rawscan.c.s
+	$(MAKE) -f CMakeFiles/rawscan.dir/build.make CMakeFiles/rawscan.dir/lib/rawscan.c.s
 .PHONY : lib/rawscan.c.s
 
 src/rawscanstresstest.o: src/rawscanstresstest.c.o
@@ -236,10 +236,10 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... rebuild_cache"
 	@echo "... edit_cache"
 	@echo "... random_line_generator"
-	@echo "... librawscan"
+	@echo "... rebuild_cache"
+	@echo "... rawscan"
 	@echo "... rawscantest"
 	@echo "... lib/rawscan.o"
 	@echo "... lib/rawscan.i"
