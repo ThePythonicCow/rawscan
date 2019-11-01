@@ -43,12 +43,13 @@ which includes the rawscan code, and a shell script driver.
 ### Download and build
 Download it, compile it, and run it.
 
-Minimal simple compile command:
+Once downloaded or cloned, to build:
+	Change to top directory.
+  cd build
+  cmake ..
+  make
 
-  ```gcc -o rawscanstresstest.c rawscanstresstest.c.c```
-
-Fancy optimized compile command:
-
-```gcc -fwhole-program -march=native -O3 -Wall -pedantic -Werror -o rawscanstresstest.c rawscanstresstest.c.c```
+This will place the resulting executables, libraries,
+and header files in that build directory.
 
 ### Running the test:
