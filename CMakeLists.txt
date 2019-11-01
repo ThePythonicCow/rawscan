@@ -8,7 +8,7 @@ endif()
 # builds ("make") to use following CMAKE_C_FLAGS_RELEASE flag,
 # while invoking "cmake . -DCMAKE_BUILD_TYPE=Debug" will cause
 # subsequent builds to use the following CMAKE_C_FLAGS_DEBUG flag.
-# Cmake creates Makefiles that call back into cmake, which turn
+# Cmake creates Makefiles that call back into cmake, which in turn
 # pickup and have make reuse the cached last set build type, until
 # cmake is run again to change its cached setting.
 
@@ -20,7 +20,7 @@ message("CMAKE_C_FLAGS_DEBUG is ${CMAKE_C_FLAGS_DEBUG}")
 message("CMAKE_C_FLAGS_RELEASE is ${CMAKE_C_FLAGS_RELEASE}")
 
 project( rawscan
-         VERSION 1.0
+         VERSION 0.1
          DESCRIPTION "Read character (byte) terminated lines or records"
          LANGUAGES C )
 
