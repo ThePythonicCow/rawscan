@@ -1,6 +1,7 @@
 # Rawscan
 
-Use rawscan_*() routines to scan input, line by line.
+Use rawscan_open(), rawscan_getline(), rawscan_close() to read
+input, line by line.
 
 Rawscan is faster and safer than "Standard IO" stdio buffered input
 routines or other alternatives (e.g. "getline").
@@ -119,14 +120,14 @@ buffer.
 
 Lines (sequences of bytes ending in the delimiterbyte byte)
 returned by rawscan_getline() are byte arrays defined by
-[RAWSCAN_RESULT->begin, RAWSCAN_RESULT->end], inclusive.  They
+[RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end], inclusive.  They
 reside somewhere in a heap allocated buffer that is at least one
 page larger than the size specified in the rawscan_open() call,
 in order to hold a read-only sentinel copy of the delimiter
 above the active portion of the buffer.
 
-The above RAWSCAN_RESULT->begin will point to the first byte in any
-line returned by rawscan_getline(), and RAWSCAN_RESULT->end will
+The above RAWSCAN_RESULT.begin will point to the first byte in any
+line returned by rawscan_getline(), and RAWSCAN_RESULT.end will
 point to the last character (typically the configured delimiter byte,
 or perhaps the very last byte in the input stream if that was not
 the delimiter byte.)  The "line" described by these return values
@@ -158,7 +159,7 @@ the existing alternatives for scanning input lines:
 
 The buffer growing reallocations in getline() present the risk of
 a denial of service attack on an application using getline() to
-read insecure data.  Getline() could be made to keep growing its
+read untrusted data.  Getline() could be made to keep growing its
 buffer until the invoking program died of memory exhaustion, or
 until the supporting system slowed unacceptably swapping a huge
 program.
@@ -178,7 +179,7 @@ reading the rest of it into the buffer, before returning the whole
 line in one piece.
 
 ## History:
-I've been coding various routines to read input line by line
+I've been coding various C routines to read input line by line
 for many years, since before stdio even existed.  As an old
 school C programmer, the complexities and inefficiencies of
 the stdio package, compared to raw read(2) and write(2) calls,
@@ -193,10 +194,10 @@ on this current rawscan code.
 This program is developed and maintained using the GNU C compiler
 on Linux systems, though a cmake build system is provided that
 (so far untested) should enable building it on BSD, Windows and
-MacOS systems as well.
+MacOS systems, and with the clang compiler.
 
 ## Download and build
-Download it, compile it, and install its shared library
+Download (or clone) it, compile it, and install its shared library
 (librawscan.so) and header file (rawscan.h) as follows:
 
 Once downloaded or cloned, cd into its build directory and do:

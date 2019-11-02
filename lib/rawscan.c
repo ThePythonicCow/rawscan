@@ -180,7 +180,7 @@
  *
  * Lines (sequences of bytes ending in the delimiterbyte byte)
  * returned by rawscan_getline() are byte arrays defined by
- * [RAWSCAN_RESULT->begin, RAWSCAN_RESULT->end],
+ * [RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end],
  * inclusive.  They reside somewhere in a heap allocated buffer
  * that is two or three pages larger than the size specified in
  * the rawscan_open() call.
@@ -259,6 +259,9 @@ RAWSCAN *rawscan_open (
     // DOS attack.  Caller should not allow_rawscan_force_bufsz
     // in production code.
 
+#ifdef _gigabyte_
+#error _gigabyte_ already defined so can not redefine
+#endif
 #   define _gigabyte_ (1024UL*1024UL*1024UL)
     if ((allow_rawscan_force_bufsz_env == true) &&
         (envbufszstr = getenv("_RAWSCAN_FORCE_BUFSZ_")) != NULL &&
@@ -269,6 +272,9 @@ RAWSCAN *rawscan_open (
 #   undef _gigabyte_
 
     // Round up x to nearest multiple of y
+#ifdef _Rnd
+#error _Rnd already defined so can not redefine
+#endif
 #   define _Rnd(x,y)    (((((unsigned long)(x))+(y)-1)/(y))*(y))
 
     npgs = _Rnd(2 * bufsz, pgsz) + 1;  // allocate this many pages to arena
@@ -378,7 +384,7 @@ void rawscan_resume_from_pause(RAWSCAN *rsp)
  * necessarily longer.  The rawscan_getline() caller may modify
  * any bytes in a such a returned array between calls, but should
  * not modify any other bytes that are in that buffer but outside
- * the range of bytes [RAWSCAN->begin,_line to RAWSCAN->end],
+ * the range of bytes [RAWSCAN.begin, RAWSCAN.end],
  * at risk of confusing the line scanning and parsing logic on
  * subsequent rawscan_getline() calls.
  *
