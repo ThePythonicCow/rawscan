@@ -1,22 +1,22 @@
 # Rawscan
 
-Use rawscan_open(), rawscan_getline(), rawscan_close() to read
+Use `rawscan_open`(), `rawscan_getline`(), `rawscan_close`() to read
 input, line by line.
 
 Rawscan is faster and safer than "Standard IO" stdio buffered input
-routines or other alternatives (e.g. "getline").
+routines or other alternatives such as `getline`().
 
 "Lines" can be any records terminated by a specified delimiter
 character (byte).  Only only one allocated buffer of specified size
 is used, handling arbitrarily long lines by returning lines that
 don't fit in that buffer in multiple chunks.
 
-The "raw" in "rawscan" means that these routines don't use any of the
-buffered stdio apparatus, but rather directly call the raw read(2)
-system call.  The "scan" means that these routines handle input only,
-not output.
+The "raw" in "rawscan" reflects that these routines don't use any
+of the buffered stdio apparatus, but rather directly call the raw
+read(2) system call.  The "scan" reflects that these routines handle
+input only, not output.
 
-rawscan_getline() reads large chunks into a buffer, and returns
+`rawscan_getline`() reads large chunks into a buffer, and returns
 portions of that buffer terminated by nul, newline, or whatever
 other "delimiterbyte" that rawscan stream is configured for.
 These portions are called "lines" below, though they can be any
@@ -25,13 +25,13 @@ or by the end of the input stream, if that last byte is not that
 rawscan stream's specified delimiterbyte.
 
 Except as noted in the pause/resume discussion below, whenever
-rawscan_getline() finds that it only has a partial line left in the
+`rawscan_getline`() finds that it only has a partial line left in the
 upper end of its buffer, it moves that partial line lower down in
 its buffer and continues, always returning full lines in one piece
 so long as the line fits in the caller specified buffer.
 
-Thus rawscan_getline() is not "zero-copy", but "infrequent copy",
-so long as it's configured in the rawscan_open() call to have an
+Thus `rawscan_getline`() is not "zero-copy", but "infrequent copy",
+so long as it's configured in the `rawscan_open`() call to have an
 internal buffer that is usually longer than the typical line it
 will be returning.
 
@@ -201,11 +201,11 @@ Download (or clone) it, compile it, and install its shared library
 (librawscan.so) and header file (rawscan.h) as follows:
 
 Once downloaded or cloned, cd into its build directory and do:
-
+<pre>
   cmake ..      # run commands in the build subdirectory
   make
   sudo make install
-
+</pre>
 One is then ready to use it in one's own source code.
 
 ## Test harness
