@@ -61,3 +61,4 @@ Makefile
 todo
 build/**
 !build/empty.txt
+!build/RawscanConfigVersion.cmake

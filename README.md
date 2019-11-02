@@ -49,7 +49,7 @@ Once downloaded or cloned, to build:
   cmake ..
   make
 
-This will place the resulting executables, libraries,
-and header files in that build directory.
+This will place the resulting executables and library
+in that build directory.
 
 ### Running the test:
