@@ -149,13 +149,13 @@ data, unless carefully sequenced using the pause/resume facility.
 As part of developing other Unix/Linux command line tools over the
 years that process data line by line, I've never been happy with
 the existing alternatives for scanning input lines:
- ** stdio's gets() is dangerously insecure, allowing buffer overflow
- ** stdio's fgets(), scanf(), getchar(), ... double buffer input
- ** stdio's fgets() cannot correctly handle lines with embedded nuls.
- ** getline() grows (realloc's) its buffer to handle longer lines
- ** scanf() risks failed format matching and buffer overflows
- ** getchar() loops are accurate, but even slower
- ** getdelim() is just like getline(), with a configurable delimiter
+    stdio's gets() is dangerously insecure, allowing buffer overflow
+    stdio's fgets(), scanf(), getchar(), ... double buffer input
+    stdio's fgets() cannot correctly handle lines with embedded nuls.
+    getline() grows (realloc's) its buffer to handle longer lines
+    scanf() risks failed format matching and buffer overflows
+    getchar() loops are accurate, but even slower
+    getdelim() is just like getline(), with a configurable delimiter
 
 The buffer growing reallocations in getline() present the risk of
 a denial of service attack on an application using getline() to
@@ -202,9 +202,9 @@ Download (or clone) it, compile it, and install its shared library
 
 Once downloaded or cloned, cd into its build directory and do:
 
- 1. cmake ..      # run commands in the build subdirectory
- 2. make
- 3. sudo make install
+      cmake ..      # run commands in the build subdirectory
+      make
+      sudo make install
 
 One is then ready to use it in one's own source code.
 
