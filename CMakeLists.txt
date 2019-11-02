@@ -9,6 +9,13 @@ project(
     LANGUAGES C
 )
 
+# To set future build type to "Release", in build directory invoke:
+#       cmake .. -DCMAKE_BUILD_TYPE=Release
+# To set future build type to "Debug", in build directory invoke:
+#       cmake .. -DCMAKE_BUILD_TYPE=Debug
+# Once build type is set, it is remembered in cmake's cache
+# for future builds, until set again.
+
 set(DEFAULT_BUILD_TYPE "Release")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -51,7 +58,9 @@ add_executable(random_line_generator)
 target_sources(random_line_generator PRIVATE tests/random_line_generator.c)
 
 include(GNUInstallDirs)
-install(TARGETS rawscan
+
+install(
+    TARGETS rawscan
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT           Rawscan_RunTime
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -59,4 +68,11 @@ install(TARGETS rawscan
         NAMELINK_COMPONENT  Rawscan_Development
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         COMPONENT           Rawscan_Development
+)
+
+INSTALL(
+    FILES
+        include/rawscan.h
+        build/RawscanConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/usr/include
 )
