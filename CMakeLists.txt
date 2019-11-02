@@ -1,7 +1,21 @@
 cmake_minimum_required(VERSION 3.13)
 
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+set(RAWSCAN_VERSION 0.1.1)
+
+project(
+    rawscan
+    VERSION "${RAWSCAN_VERSION}"
+    DESCRIPTION "Read character (byte) terminated lines or records"
+    LANGUAGES C
+)
+
+set(DEFAULT_BUILD_TYPE "Release")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting '-DCMAKE_BUILD_TYPE=' build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
+  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
 # Invoking "cmake . -DCMAKE_BUILD_TYPE=Release" will cause subsequent
@@ -15,18 +29,6 @@ endif()
 set(CMAKE_C_FLAGS "-Wall -Wextra -Wpedantic")
 set(CMAKE_C_FLAGS_DEBUG "-g")
 set(CMAKE_C_FLAGS_RELEASE "-O3")
-
-message("CMAKE_C_FLAGS_DEBUG is ${CMAKE_C_FLAGS_DEBUG}")
-message("CMAKE_C_FLAGS_RELEASE is ${CMAKE_C_FLAGS_RELEASE}")
-
-set(RAWSCAN_VERSION 0.1.1)
-
-project(
-    rawscan
-    VERSION "${RAWSCAN_VERSION}"
-    DESCRIPTION "Read character (byte) terminated lines or records"
-    LANGUAGES C
-)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
