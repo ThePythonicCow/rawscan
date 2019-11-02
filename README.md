@@ -149,6 +149,7 @@ data, unless carefully sequenced using the pause/resume facility.
 As part of developing other Unix/Linux command line tools over the
 years that process data line by line, I've never been happy with
 the existing alternatives for scanning input lines:
+
     stdio's gets() is dangerously insecure, allowing buffer overflow
     stdio's fgets(), scanf(), getchar(), ... double buffer input
     stdio's fgets() cannot correctly handle lines with embedded nuls.
