@@ -18,18 +18,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Invoking "cmake . -DCMAKE_BUILD_TYPE=Release" will cause subsequent
-# builds ("make") to use following CMAKE_C_FLAGS_RELEASE flag,
-# while invoking "cmake . -DCMAKE_BUILD_TYPE=Debug" will cause
-# subsequent builds to use the following CMAKE_C_FLAGS_DEBUG flag.
-# Cmake creates Makefiles that call back into cmake, which in turn
-# pickup and have make reuse the cached last set build type, until
-# cmake is run again to change its cached setting.
-
-set(CMAKE_C_FLAGS "-Wall -Wextra -Wpedantic")
-set(CMAKE_C_FLAGS_DEBUG "-g")
-set(CMAKE_C_FLAGS_RELEASE "-O3")
-
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
     RawscanConfigVersion.cmake
@@ -45,6 +33,15 @@ target_sources(
 )
 target_include_directories(rawscan PUBLIC include)
 target_compile_features(rawscan PRIVATE c_std_11)
+
+target_compile_options(rawscan PRIVATE
+    $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
+        -pipe -march=native
+        $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>>
+        $<$<CONFIG:Release>:-O3 >>
+    $<$<C_COMPILER_ID:MSVC>:
+        $<$<CONFIG:Debug>:/Od /Wall /Zi>>
+)
 
 add_executable(rawscantest)
 target_sources(rawscantest PRIVATE src/rawscanstresstest.c)
@@ -63,4 +60,3 @@ install(TARGETS rawscan
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         COMPONENT           Rawscan_Development
 )
-#f CMAKE_INSTALL_PREFIX is set via cmake.configureArgs or cmake.configureSettings, cmake.installPrefix
