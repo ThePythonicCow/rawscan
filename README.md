@@ -151,7 +151,7 @@ regardless of what's in the buffer at the time.
 
 # Advanced features
 
-The following pause/resume,memory, multiline, and delimiterbyte
+The following pause/resume, memory, multiline, and delimiterbyte
 facilities extend the default behavior described above.  If you
 use one of these features, then some of the specifics given above
 might not apply, as will be described in the following.
@@ -163,15 +163,25 @@ contents of the buffer are invalidated by using the optional
 **pause/resume** states.
 
 To use **pause/resume**, first invoke `rawscan_enable_pause`()
-on the RAWSCAN stream.  Then whenever a `rawscan_getline`() would
-have needed to invalidate the current contents of the buffer for
-that stream, that `rawscan_getline`() call will instead return
-with a `RAWSCAN_RESULT.type` of `rt_paused`, without invalidating
-the current buffer contents.  When the calling routine has finished
-using or copied out whatever data it's still using in the *`rawscan`*
-buffer, it can then call the `rawscan_resume_from_pause`() function
-on that stream, which will unpause the stream and enable subsequent
-`rawscan_getline`() calls to succeed again.
+on the RAWSCAN stream.  That call just sets a flag on the
+stream's internal state and returns immediately.
+
+Then whenever a `rawscan_getline`() call hits the upper end of
+the buffer and needs to invalidate the already returned portion to
+make room for more data, that `rawscan_getline`() call will instead
+return with a `RAWSCAN_RESULT.type` of `rt_paused`, without altering
+the current buffer contents.
+
+When the calling routine has finished using or copying out
+whatever data it's still needs from the buffer, it can then call
+the `rawscan_resume_from_pause`() function on that stream, which
+will unpause the stream and enable subsequent `rawscan_getline`()
+calls to once again return more lines, and overwrite some of the
+mpreviously returned data that had been in the buffer.
+
+### Accessing state of a paused stream
+
+(to be written - routines to observe state of a paused stream)
 
 ### Special Memory Handling
 
@@ -190,19 +200,23 @@ so long as the entire record still fits in the buffer.)
 
 (to be written - disabling full readonly page for sentinel)
 
+### Caller controlled resizing of buffer
+
+(to be written - shrinking or expanding the buffer while in use)
+
 # Comparative Analysis:
 
 As part of developing other Unix/Linux command line tools over the
 years that process data line by line, I've never been happy with
 the existing alternatives for scanning input lines:
 
- - stdio's gets() is dangerously insecure, allowing buffer overflow.
- - stdio's fgets(), scanf() and getchar() use slow double buffering.
- - stdio's fgets() cannot correctly handle lines with embedded nuls.
- - scanf() risks failed format matching and buffer overflows
- - getchar() loops are accurate, but with slower per byte logic
- - getline() grows (realloc's) its buffer to handle longer lines
- - getdelim() is just like getline(), with a configurable delimiter
+ - stdio's [gets](https://www.studymite.com/blog/strings-in-c#read_using_gets)() is dangerously insecure, allowing buffer overflow.
+ - stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)(), [scanf](http://c-faq.com/stdio/scanfprobs.html)() and [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() use slow double buffering.
+ - stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)() cannot correctly handle lines with embedded nuls.
+ - [scanf](http://c-faq.com/stdio/scanfprobs.html)() risks failed format matching and buffer overflows
+ - [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() loops are accurate, but with slower per byte logic
+ - [getline](https://www.studymite.com/blog/strings-in-c#read_using_getline)() grows (realloc's) its buffer to handle longer lines
+ - [getdelim](https://www.studymite.com/blog/strings-in-c#read_using_getdelim)() is just like getline(), with a configurable delimiter
 
 The buffer growing reallocations in `getline`() present the risk
 of a denial of service attack.  Applications using `getline`()
