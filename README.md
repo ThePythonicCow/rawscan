@@ -204,11 +204,19 @@ so long as the entire record still fits in the buffer.)
 
 (to be written - shrinking or expanding the buffer while in use)
 
+# Helper Routines
+
+(to be written - some minor helper routines that support various
+carriage return/newline conventions such as a chomp that works
+well with the returns from rt_getline, and access routines for
+potentially interesting fields or values of the (theoretically)
+opaque RAWSCAN structure.)
+
 # Comparative Analysis:
 
-As part of developing other Unix/Linux command line tools over the
-years that process data line by line, I've never been happy with
-the existing alternatives for scanning input lines:
+As part of developing other personal Unix/Linux command line tools
+over the years that process data line by line, I've not been happy
+with the existing alternatives for scanning input lines:
 
  - stdio's [gets](https://www.studymite.com/blog/strings-in-c#read_using_gets)() is dangerously insecure, allowing buffer overflow.
  - stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)(), [scanf](http://c-faq.com/stdio/scanfprobs.html)() and [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() use slow double buffering.
@@ -244,12 +252,14 @@ I've been coding various C routines to read input line by line
 for many years, since before stdio even existed.  As an old
 school C programmer, the complexities and inefficiencies of
 the stdio package, compared to raw read(2) and write(2) calls,
-has always annoyed me a bit.  As a coder of quite a few personal
-text processing tools, I've long experimented with various safe,
-fast, line readers.  Those familiar with Rust's "Result" style
-of handling complex function call returns, or with the above
-mentioned LineReader routine, will recognize their influence
-on this current rawscan code.
+has always annoyed me a bit.
+
+As a coder of quite a few personal text processing tools, I've long
+experimented with various safe, fast, line readers.  Those familiar
+with Rust's [Result](https://doc.rust-lang.org/std/result/) style of
+handling complex function call returns, or with the above mentioned
+[LineReader](https://crates.io/crates/linereader) routine, will recognize their influence on this current
+rawscan code.
 
 # How to obtain *`rawscan`*
 
