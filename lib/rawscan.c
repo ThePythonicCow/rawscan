@@ -65,7 +65,7 @@
 #endif
 
 /*
- * Use "Raw Scan" rawscan_*() routines to scan input, line by
+ * Use "rawscan" rs_*() routines to scan input, line by
  * line, faster than "Standard IO" stdio buffered input routines.
  *
  * The "raw" means that these routines don't use any of the
@@ -73,7 +73,7 @@
  * The "scan" means that these routines handle input only,
  * not output.
  *
- * rawscan_getline() reads large chunks into a buffer, and returns
+ * rs_getline() reads large chunks into a buffer, and returns
  * portions of that buffer terminated by nul, newline, or whatever
  * other "delimiterbyte" that rawscan stream is configured for.
  * These portions are called "lines" below, though they can be any
@@ -82,12 +82,12 @@
  * last byte is not that rawscan stream's specified delimiterbyte.
  *
  * Except as noted in the pause/resume discussion below, whenever
- * rawscan_getline() finds that it only has a partial line left in
+ * rs_getline() finds that it only has a partial line left in
  * the upper end of its buffer, it moves that partial line lower
  * down in its buffer and continues.
  *
- * Thus rawscan_getline() is not "zero-copy", but "infrequent
- * copy", so long as it's configured in the rawscan_open() call
+ * Thus rs_getline() is not "zero-copy", but "infrequent
+ * copy", so long as it's configured in the rs_open() call
  * to have an internal buffer that is usually longer than the
  * typical line it will be returning.
  *
@@ -98,36 +98,36 @@
  *
  * Except when using the optional pause/resume states, ordinary
  * usage of rawscan on any particular input stream must be single
- * threaded.  If two threads invoked rawscan_getline() on the same
+ * threaded.  If two threads invoked rs_getline() on the same
  * RAWSCAN stream, then one of these calls could cause the
  * buffered data already returned to the other thread to be moved
  * or overwritten, while the other thread was still accessing it.
  * Multi-thread access to a RAWSCAN stream might be safe under the
  * management of a wrapper that handled the synchronizing locking,
- * and that copied out data being returned on a rawscan_getline()
+ * and that copied out data being returned on a rs_getline()
  * call to the invoking thread's private data area, before
  * returning.  A sufficiently sophisticated such wrapper manager
  * could use the pause/resume facility in order to allow parallel
  * read-only access to the buffer, while locking and single
- * threading rawscan_getline() calls that update the thread, and
+ * threading rs_getline() calls that update the thread, and
  * joining or blocking all other threads from read-only access
- * during a rawscan_getline() and rawscan_resume_from_pause()
+ * during a rs_getline() and rs_resume_from_pause()
  * whenever the rawscan stream paused.  Any such multi-threading
  * of this library is beyond the scope of this current code, but
  * perhaps could be implemented on top of this current code.
  *
  * The rawscan calling routine can gain some control over when the
  * contents of the buffer are invalidated by using the optional
- * pause/resume states.  First invoke rawscan_enable_pause() on
- * the RAWSCAN stream.  Then whenever a rawscan_getline() or
+ * pause/resume states.  First invoke rs_enable_pause() on
+ * the RAWSCAN stream.  Then whenever a rs_getline() or
  * similar call needs to invalidate the current contents of the
- * buffer for that stream, that rawscan_getline() call will
+ * buffer for that stream, that rs_getline() call will
  * instead return with a RAWSCAN_RESULT.type of rt_paused, without
  * invalidating the current buffer contents.  When the calling
  * routine has finished whatever operations or copied out whatever
  * data that access the RAWSCAN buffer, it can then call the
- * rawscan_resume_from_pause() function on that stream, which will
- * unpause the stream and enable subsequent rawscan_getline()
+ * rs_resume_from_pause() function on that stream, which will
+ * unpause the stream and enable subsequent rs_getline()
  * calls to succeed again.
  *
  * For applications that can ignore overly long lines, the rawscan
@@ -166,12 +166,12 @@
  * ensuring that calls to rawmemchr() will terminate there, if not
  * sooner, regardless of what's in the buffer at the time.
  *
- * The return value from rawscan_getline() is the RAWSCAN_RESULT
+ * The return value from rs_getline() is the RAWSCAN_RESULT
  * structure below.
  *
  * When returning a line, the RAWSCAN_RESULT.end pointer will
  * point to the newline '\n' character (or whatever delimiterbyte
- * was established in the rawscan_open() call) that ends the line
+ * was established in the rs_open() call) that ends the line
  * being returned.  If the caller wants that newline replaced with
  * (for example) a nul, such as when using the returned line as a
  * potential filename to be passed back into the kernel as a nul-
@@ -179,21 +179,21 @@
  * byte, directly in the returned buffer.
  *
  * Lines (sequences of bytes ending in the delimiterbyte byte)
- * returned by rawscan_getline() are byte arrays defined by
+ * returned by rs_getline() are byte arrays defined by
  * [RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end],
  * inclusive.  They reside somewhere in a heap allocated buffer
  * that is two or three pages larger than the size specified in
- * the rawscan_open() call.
+ * the rs_open() call.
  *
- * That heap allocated buffer is freed in the rawscan_close()
- * call, invalidating any previously returned rawscan_getline()
+ * That heap allocated buffer is freed in the rs_close()
+ * call, invalidating any previously returned rs_getline()
  * results.  That heap allocated buffer is never moved, once setup
- * in the rawscan_open() call, until the rawscan_close() call.
- * But subsequent rawscan_getline() calls may invalidate data in
+ * in the rs_open() call, until the rs_close() call.
+ * But subsequent rs_getline() calls may invalidate data in
  * that buffer by overwriting or shifting it downward. So
- * accessing stale results from an earlier rawscan_getline() call,
- * after additional calls of rawscan_getline(), prior to the
- * rawscan_close() of that stream, won't directly cause an invalid
+ * accessing stale results from an earlier rs_getline() call,
+ * after additional calls of rs_getline(), prior to the
+ * rs_close() of that stream, won't directly cause an invalid
  * memory access, but may return invalid data, unless carefully
  * sequenced using the pause/resume facility.
  */
@@ -202,7 +202,7 @@
 
 bool allow_rawscan_force_bufsz_env = false;
 
-RAWSCAN *rawscan_open (
+RAWSCAN *rs_open (
   int fd,              // read input from this file descriptor
   size_t bufsz,        // handle lines at least this many bytes in one chunk
   char delimiterbyte)  // newline '\n' or other char marking end of "lines"
@@ -226,17 +226,17 @@ RAWSCAN *rawscan_open (
     // of the user specified size "bufsz" ... that buffer is
     // rsp->bufb.
     //
-    // Whenever the rawscan_getline() routine can no longer find
+    // Whenever the rs_getline() routine can no longer find
     // an entire line in bufb to return, if the lower rsp->bufa is
     // not in use (contains no unread data), then it shifts the
     // partial line it has at the upper end of bufb down, by
     // exactly bufsz bytes, to the upper end of bufa, and then
     // tries to read more.
     //
-    // If the rawscan_getline() routine finds that it cannot shift
+    // If the rs_getline() routine finds that it cannot shift
     // a partial line from bufb down to bufa because there is
     // still some unread (not yet returned to its caller) data in
-    // bufa, then rawscan_getline() begins "too long line"
+    // bufa, then rs_getline() begins "too long line"
     // processing, returning the line in partial chunks.  This
     // only happens when an input line is some amount (depending
     // on alignment) longer than bufsz.
@@ -334,7 +334,7 @@ RAWSCAN *rawscan_open (
     return rsp;
 }
 
-void rawscan_close(RAWSCAN *rsp)
+void rs_close(RAWSCAN *rsp)
 {
     /* We don' t close rsp->fd ... we got it open and we leave it open */
     (void) mprotect ((char *)(rsp->bufbtop), rsp->pgsz, PROT_READ|PROT_WRITE);
@@ -342,12 +342,12 @@ void rawscan_close(RAWSCAN *rsp)
     free(rsp);
 }
 
-void rawscan_enable_pause(RAWSCAN *rsp)
+void rs_enable_pause(RAWSCAN *rsp)
 {
     rsp->pause_on_inval = true;
 }
 
-void rawscan_resume_from_pause(RAWSCAN *rsp)
+void rs_resume_from_pause(RAWSCAN *rsp)
 {
     rsp->pause_on_inval = false;
 }
@@ -355,7 +355,7 @@ void rawscan_resume_from_pause(RAWSCAN *rsp)
 /*
  * Return next "line" from rsp input.
  *
- * The return value of rawscan_getline() is a RAWSCAN_RESULT
+ * The return value of rs_getline() is a RAWSCAN_RESULT
  * structure, various fields of which will be valid, depending on
  * the value of that struct's first field, "type", an enum of type
  * ssget_type.
@@ -364,7 +364,7 @@ void rawscan_resume_from_pause(RAWSCAN *rsp)
  * rt_full_line, the RAWSCAN_RESULT begin pointer will point
  * to the first character (byte) in a line, and the
  * RAWSCAN_RESULT end pointer will point to the
- * delimiterbyte, as specfied in the rawscan_open() call, such as
+ * delimiterbyte, as specfied in the rs_open() call, such as
  * the '\n' or '\0', that ends that line.
  *
  * This code guarantees that the returned byte array,
@@ -379,29 +379,29 @@ void rawscan_resume_from_pause(RAWSCAN *rsp)
  * sentinel page, just above the main buffer.
  *
  * The heap memory holding the returned character array ("line")
- * will remain valid until the next rawscan_getline() or
- * rawscan_close() call on that same RAWSCAN stream, but not
- * necessarily longer.  The rawscan_getline() caller may modify
+ * will remain valid until the next rs_getline() or
+ * rs_close() call on that same RAWSCAN stream, but not
+ * necessarily longer.  The rs_getline() caller may modify
  * any bytes in a such a returned array between calls, but should
  * not modify any other bytes that are in that buffer but outside
  * the range of bytes [RAWSCAN.begin, RAWSCAN.end],
  * at risk of confusing the line scanning and parsing logic on
- * subsequent rawscan_getline() calls.
+ * subsequent rs_getline() calls.
  *
  * If the input stream didn't end with the delimiter byte, e.g. a
  * file without a final newline, then the RAWSCAN_RESULT.end
- * for the rawscan_getline() call that returns the final line will
+ * for the rs_getline() call that returns the final line will
  * be pointing into the buffer at the last character that was read
  * from the input, that last character won't be the specified
  * delimiterbyte in this case, but rather it will be whatever
  * other character was the stream's final character, and the
  * RAWSCAN_RESULT.type field will be "rt_full_line (or
- * rt_longline_ended)" after the last line.  If rawscan_getline() is
+ * rt_longline_ended)" after the last line.  If rs_getline() is
  * called one more time on such a stream, then the type field for
  * that result will finally be set to "rt_eof".
  */
 
-// Private helper routines used by rawscan_getline():
+// Private helper routines used by rs_getline():
 
 func_static RAWSCAN_RESULT rawscan_full_line(RAWSCAN *rsp)
 {
@@ -427,8 +427,8 @@ func_static RAWSCAN_RESULT rawscan_full_line(RAWSCAN *rsp)
     resp.line.end = rsp->end_this_chunk;
 
     rsp->p = rsp->next_val_p;
-    rsp->end_this_chunk = NULL;     // force rawscan_getline to set again
-    rsp->next_val_p = NULL;         // force rawscan_getline to set again
+    rsp->end_this_chunk = NULL;     // force rs_getline to set again
+    rsp->next_val_p = NULL;         // force rs_getline to set again
 
     return resp;
 }
@@ -492,8 +492,8 @@ func_static RAWSCAN_RESULT rawscan_start_of_longline(RAWSCAN *rsp)
     rsp->in_longline = true;
     rsp->longline_ended = false;
 
-    rsp->end_this_chunk = NULL;     // force rawscan_getline to set again
-    rsp->next_val_p = NULL;         // force rawscan_getline to set again
+    rsp->end_this_chunk = NULL;     // force rs_getline to set again
+    rsp->next_val_p = NULL;         // force rs_getline to set again
 
     return resp;
 }
@@ -516,8 +516,8 @@ func_static RAWSCAN_RESULT rawscan_within_longline(RAWSCAN *rsp)
     resp.line.end = rsp->end_this_chunk;
     rsp->p = rsp->next_val_p;
 
-    rsp->end_this_chunk = NULL;     // force rawscan_getline to set again
-    rsp->next_val_p = NULL;         // force rawscan_getline to set again
+    rsp->end_this_chunk = NULL;     // force rs_getline to set again
+    rsp->next_val_p = NULL;         // force rs_getline to set again
 
     return resp;
 }
@@ -526,7 +526,7 @@ func_static RAWSCAN_RESULT rawscan_terminate_longline(RAWSCAN *rsp)
 {
     RAWSCAN_RESULT resp;
 
-    // To keep the interface to rawscan_getline() simple(r),
+    // To keep the interface to rs_getline() simple(r),
     // we never both (1) return another chunk of a longline, and
     // (2) tell the caller that this is the end of a longline,
     // in the same response.  All longline responses either
@@ -596,7 +596,7 @@ func_static RAWSCAN_RESULT rawscan_handle_end_of_longline(RAWSCAN *rsp)
     // the caller that the currently active longline just
     // terminated.  The "rsp->longline_ended = true" setting below
     // triggers the "if (rsp->longline_ended)" code at the top of
-    // rawscan_getline(), in order to get back here for the second
+    // rs_getline(), in order to get back here for the second
     // step (the longline termination) after returning the last
     // longline data chunk to the caller in the first step.
 
@@ -620,7 +620,7 @@ typedef struct {
     bool paused;
 } rawscan_internal_status_t;
 
-RAWSCAN_RESULT rawscan_getline (RAWSCAN *rsp)
+RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
 {
     rawscan_internal_status_t status_struct;
     rawscan_internal_status_t *pstat;

@@ -26,7 +26,7 @@ typedef struct {
     char delimiterbyte;    // byte @ end of "lines" (e.g. '\n' or '\0')
     const char *p, *q;     // [begin, end) of not yet returned chars
 
-    // When rawscan_getline() calls a subroutine to return the next
+    // When rs_getline() calls a subroutine to return the next
     // line or chunk (part of a line too long to fit in buffer)
     // then it must tell the subroutine:
     //  1) ptr to first byte in chunk/line: rsp->p
@@ -44,7 +44,7 @@ typedef struct {
     bool pause_on_inval;   // set "is_paused" when need to invalidate buffer
 } RAWSCAN;
 
-enum rawscan_result_type {
+enum rs_result_type {
      // The RAWSCAN_RESULT->line begin and end fields are valid:
      rt_full_line,          // one entire line
      rt_start_longline,     // first chunk in a long line
@@ -60,11 +60,11 @@ enum rawscan_result_type {
  };
 
 /*
- * rawscan_getline() returns a copy of the following structure:
+ * rs_getline() returns a copy of the following structure:
  */
 
 typedef struct {
-    enum rawscan_result_type type;
+    enum rs_result_type type;
 
     union {
         struct {
@@ -76,19 +76,19 @@ typedef struct {
     };
 } RAWSCAN_RESULT;
 
-RAWSCAN *rawscan_open (
+RAWSCAN *rs_open (
   int fd,              // read input from this (already open) file descriptor
   size_t bufsz,        // handle lines at least this many bytes in one chunk
   char delimiterbyte); // newline '\n' or other char marking end of "lines"
 
-void rawscan_close(RAWSCAN *rsp);
-void rawscan_enable_pause(RAWSCAN *rsp);
-void rawscan_resume_from_pause(RAWSCAN *rsp);
-RAWSCAN_RESULT rawscan_getline (RAWSCAN *rsp);
+void rs_close(RAWSCAN *rsp);
+void rs_enable_pause(RAWSCAN *rsp);
+void rs_resume_from_pause(RAWSCAN *rsp);
+RAWSCAN_RESULT rs_getline (RAWSCAN *rsp);
 
 // By default, don't allow bufsz env override. Only commands that
 // set allow_rawscan_force_bufsz_env to true at runtime allow it.
-// If allowed, then rawscan library code overrides rawscan_open()
+// If allowed, then rawscan library code overrides rs_open()
 // bufsz specified by calling application with whatever value is
 // set in the environment variable _RAWSCAN_FORCE_BUFSZ_ (if that
 // variable is set to a positive integer value.)

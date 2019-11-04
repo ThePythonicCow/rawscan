@@ -25,7 +25,7 @@
  *
  * The primary motivation for this command is to generate input
  * test for a high performance "getline()" variant that I am
- * working on, which will be called "rawscan_getline()", to be
+ * working on, which will be called "rs_getline()", to be
  * made available in both C (which I know well) and Rust
  * (which I am learning.)
  *

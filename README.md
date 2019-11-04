@@ -4,7 +4,7 @@
 data one line at a time.  A line is any sequence of bytes terminated
 by a designated delimiter byte.
 
-Use `rawscan_open`(), `rawscan_getline`(), and `rawscan_close`()
+Use `rs_open`(), `rs_getline`(), and `rs_close`()
 to read input, line by line.
 
 *`Rawscan`*'s advantages include:
@@ -27,13 +27,13 @@ Here's how you can use *`rawscan`* in your code:
 
 ### RAWSCAN_RESULT
 
-To see example code using the structure returned by `rawscan_getline`(),
+To see example code using the structure returned by `rs_getline`(),
 see the above Example Code section.
 
-The return value from `rawscan_getline`() is the RAWSCAN_RESULT
+The return value from `rs_getline`() is the RAWSCAN_RESULT
 structure defined in `rawscan.h`.  This return structure contains a
 typed union, handling any of the several possible results from a
-`rawscan_getline`() call, such as another full line, a chunk of a
+`rs_getline`() call, such as another full line, a chunk of a
 long line, an error, an end-of-file, a paused input stream, and
 so forth.
 
@@ -46,29 +46,29 @@ string, then the caller can overwrite that byte, directly in the
 *`rawscan`* return buffer.
 
 Lines (sequences of bytes ending in the delimiterbyte byte)
-returned by `rawscan_getline`() are byte arrays in the interval
+returned by `rs_getline`() are byte arrays in the interval
 `[RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end]`, inclusive.  They
 reside somewhere in a heap allocated buffer that is at least one
-page larger than the size specified in the `rawscan_open`() call,
+page larger than the size specified in the `rs_open`() call,
 in order to hold the read-only sentinel copy of the delimiterbyte,
 as discussed above in the `rawmemchr` section.
 
 The above `RAWSCAN_RESULT.begin` will point to the first byte in
-any line returned by `rawscan_getline`(), and `RAWSCAN_RESULT.end`
+any line returned by `rs_getline`(), and `RAWSCAN_RESULT.end`
 will point to the last character (either the delimiterbyte,
 or the very last byte in the input stream if that comes first.)
-The "line" described by these return values from `rawscan_getline`()
-will remain valid at least until the next `rawscan_getline`() or
-`rawscan_close`() call.
+The "line" described by these return values from `rs_getline`()
+will remain valid at least until the next `rs_getline`() or
+`rs_close`() call.
 
-That heap allocated *`rawscan`* buffer is freed in the `rawscan_close`()
-call, invalidating any previously returned `rawscan_getline`() results.
+That heap allocated *`rawscan`* buffer is freed in the `rs_close`()
+call, invalidating any previously returned `rs_getline`() results.
 That heap allocated buffer is never moved or expanded, once setup
-in the `rawscan_open`() call, until the `rawscan_close`() call.  But
-subsequent `rawscan_getline`() calls may invalidate data in that buffer
+in the `rs_open`() call, until the `rs_close`() call.  But
+subsequent `rs_getline`() calls may invalidate data in that buffer
 by overwriting or shifting it downward. So accessing stale results
-from an earlier `rawscan_getline`() call, after additional calls
-of `rawscan_getline`(), prior to the `rawscan_close`() of that stream,
+from an earlier `rs_getline`() call, after additional calls
+of `rs_getline`(), prior to the `rs_close`() of that stream,
 won't directly cause an invalid memory access, but may return invalid
 data, unless carefully sequenced using the pause/resume facility.
 
@@ -76,23 +76,23 @@ data, unless carefully sequenced using the pause/resume facility.
 
 Except as noted in **Special Memory Handling**, below, *`rawscan`*
 uses a single fixed length buffer that is allocated during the
-`rawscan_open`() call.  All lines short enough to fit in that buffer
+`rs_open`() call.  All lines short enough to fit in that buffer
 are returned in one piece, using pointers directly into that buffer,
 with zero copies.  Lines too long to fit are returned in multiple
 chunks.
 
 Except as noted in the **pause/resume** discussion below, whenever
-`rawscan_getline`() finds that it only has a partial line left in
+`rs_getline`() finds that it only has a partial line left in
 the upper end of its buffer, it shifts that partial line lower down
 in its buffer and continues, always trying to return full lines in
 one piece.  For this reason in particular, __*note that*__ each
-`rawscan_getline`() call might invalidate the pointers returned
+`rs_getline`() call might invalidate the pointers returned
 in prior calls (unless the **pause/resume** feature is used.)
 
 ### (nearly) zero-copy
 
-Thus `rawscan_getline`() is not "zero-copy", but "infrequent copy",
-so long as it's configured in the `rawscan_open`() call to have an
+Thus `rs_getline`() is not "zero-copy", but "infrequent copy",
+so long as it's configured in the `rs_open`() call to have an
 internal buffer that is usually longer than the typical lines it's
 returning.
 
@@ -162,20 +162,20 @@ The *`rawscan`* calling routine can gain some control over when the
 contents of the buffer are invalidated by using the optional
 **pause/resume** states.
 
-To use **pause/resume**, first invoke `rawscan_enable_pause`()
+To use **pause/resume**, first invoke `rs_enable_pause`()
 on the RAWSCAN stream.  That call just sets a flag on the
 stream's internal state and returns immediately.
 
-Then whenever a `rawscan_getline`() call hits the upper end of
+Then whenever a `rs_getline`() call hits the upper end of
 the buffer and needs to invalidate the already returned portion to
-make room for more data, that `rawscan_getline`() call will instead
+make room for more data, that `rs_getline`() call will instead
 return with a `RAWSCAN_RESULT.type` of `rt_paused`, without altering
 the current buffer contents.
 
 When the calling routine has finished using or copying out
 whatever data it's still needs from the buffer, it can then call
-the `rawscan_resume_from_pause`() function on that stream, which
-will unpause the stream and enable subsequent `rawscan_getline`()
+the `rs_resume_from_pause`() function on that stream, which
+will unpause the stream and enable subsequent `rs_getline`()
 calls to once again return more lines, and overwrite some of the
 mpreviously returned data that had been in the buffer.
 
@@ -232,7 +232,7 @@ different offset.
 
 Instead, *`rawscan`* never splits lines that it can fit in its buffer,
 and never reallocates a bigger buffer than initially allocated in
-the `rawscan_open`() call.  If an input line that would have fit in
+the `rs_open`() call.  If an input line that would have fit in
 the buffer would spill off the end of the buffer, rawscan will
 shift that partially read line lower in the buffer and continue
 reading the rest of it into the buffer, before returning the whole

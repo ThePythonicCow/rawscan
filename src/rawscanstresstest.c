@@ -53,11 +53,11 @@ void rawscanstresstest(const char *fname, int fd)
     allow_rawscan_force_bufsz_env = true;
 
 #   define default_buffer_size (16*4096)
-    RAWSCAN *rsp = rawscan_open(fd, default_buffer_size, '\n');
+    RAWSCAN *rsp = rs_open(fd, default_buffer_size, '\n');
     for (;;) {
-        RAWSCAN_RESULT res = rawscan_getline(rsp);
+        RAWSCAN_RESULT rt = rs_getline(rsp);
 
-        switch (res.type) {
+        switch (rt.type) {
             case rt_full_line:
                 linenum++;
                 // fall through ...
@@ -67,8 +67,8 @@ void rawscanstresstest(const char *fname, int fd)
                 if (linenum == next_line_to_write) {
                     next_line_to_write += skip_n;
                     skip_n *= 2;
-                    x = (res.line.end - res.line.begin + 1);
-                    if (write(1, res.line.begin, x) != x)
+                    x = (rt.line.end - rt.line.begin + 1);
+                    if (write(1, rt.line.begin, x) != x)
                         write_failed();
                 }
                 break;
@@ -84,16 +84,16 @@ void rawscanstresstest(const char *fname, int fd)
                 // printf("%ld\t%s\n", llen, fname);
                 goto do_return;
             case rt_err:
-                fprintf(stderr, "%s: %s\n", fname, strerror(res.errnum));
+                fprintf(stderr, "%s: %s\n", fname, strerror(rt.errnum));
                 goto do_return;
             default:
-                fprintf(stderr,"unrecognized rawscan_getline type %d\n", res.type);
+                fprintf(stderr,"unrecognized rs_getline type %d\n", rt.type);
                 goto do_return;
         }
     }
 
   do_return:
-    rawscan_close(rsp);
+    rs_close(rsp);
     return;
 }
 
