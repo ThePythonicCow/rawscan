@@ -4,73 +4,25 @@
 data one line at a time.  A line is any sequence of bytes terminated
 by a designated delimiter byte.
 
-Use `rs_open`(), `rs_getline`(), and `rs_close`()
-to read input, line by line.
+Use the *`rawscan`* library routines `rs_open`(), `rs_getline`(), and
+`rs_close`() to read input, line by line, from any any input stream
+(any readable open file descriptor).  See doc/HowToUse.md for the details of how to use *`rawscan`*.
 
 *`Rawscan`*'s advantages include:
 
-- no double buffering that wastes cpu and memory
-- rarely copies incoming data before returning it
-- safer, with no risk of buffer overruns
-- no confusing sscanf format risking bugs and overruns
-- no complex and expensive per byte logic
-- correctly and easily handles embedded nuls
-- no chance of repeated, increasingly big, mallocs
-
-# How to use *`rawscan`*
-
-Here's how you can use *`rawscan`* in your code:
-
-### Example Code
-
-(to be written - pointers to a few example uses)
-
-### RAWSCAN_RESULT
-
-To see example code using the structure returned by `rs_getline`(),
-see the above Example Code section.
-
-The return value from `rs_getline`() is the RAWSCAN_RESULT
-structure defined in `rawscan.h`.  This return structure contains a
-typed union, handling any of the several possible results from a
-`rs_getline`() call, such as another full line, a chunk of a
-long line, an error, an end-of-file, a paused input stream, and
-so forth.
-
-When returning a line, the `RAWSCAN_RESULT.end` pointer will point
-to the delimiterbyte (e.g. to the newline '\n') ending that line.
-If the caller wants that delimiterbyte replaced with (for example)
-a nul, such as when directly using the returned line as a filename
-to be passed back into the kernel as a nul-terminated pathname
-string, then the caller can overwrite that byte, directly in the
-*`rawscan`* return buffer.
-
-Lines (sequences of bytes ending in the delimiterbyte byte)
-returned by `rs_getline`() are byte arrays in the interval
-`[RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end]`, inclusive.  They
-reside somewhere in a heap allocated buffer that is at least one
-page larger than the size specified in the `rs_open`() call,
-in order to hold the read-only sentinel copy of the delimiterbyte,
-as discussed above in the `rawmemchr` section.
-
-The above `RAWSCAN_RESULT.begin` will point to the first byte in
-any line returned by `rs_getline`(), and `RAWSCAN_RESULT.end`
-will point to the last character (either the delimiterbyte,
-or the very last byte in the input stream if that comes first.)
-The "line" described by these return values from `rs_getline`()
-will remain valid at least until the next `rs_getline`() or
-`rs_close`() call.
-
-That heap allocated *`rawscan`* buffer is freed in the `rs_close`()
-call, invalidating any previously returned `rs_getline`() results.
-That heap allocated buffer is never moved or expanded, once setup
-in the `rs_open`() call, until the `rs_close`() call.  But
-subsequent `rs_getline`() calls may invalidate data in that buffer
-by overwriting or shifting it downward. So accessing stale results
-from an earlier `rs_getline`() call, after additional calls
-of `rs_getline`(), prior to the `rs_close`() of that stream,
-won't directly cause an invalid memory access, but may return invalid
-data, unless carefully sequenced using the pause/resume facility.
+    - fast, safe and robust
+    - rarely moves or copies data internally
+    - fixed length caller specified buffer doesn't grow
+    - can be used in memory constrained situations
+    - can be initialized with bigger buffer for performance
+    - handles arbitrarily long input lines
+    - all lines that fit in buffer returned in one chunk
+    - no confusing sscanf format risking bugs and overruns
+    - handles Windows style "\r\n" line endings
+    - correctly and easily handles embedded nuls
+    - beats `gets`, `fgets`, `scanf`, `getline` and `getdelim`
+    - .. see "Comparative Analysis" below for details
+    - fast ... did I say fast?
 
 # How `rawscan` works internally
 
@@ -100,18 +52,19 @@ This strategy works especially well when there is a given upper
 length to the line length that needs to be parsed conveniently (in
 one piece), and longer lines can be ignored or handled in chunks.
 
-For applications that can ignore overly long lines, the *`rawscan`*
-interface makes that quick and easy to do so.  Just ignore
-RAWSCAN_RESULT's with result types of `rt_start_longline`,
-`rt_within_longline` or `rt_longline_ended`.
+For applications that can ignore or quickly skip over overly
+long lines, the *`rawscan`* interface makes that especially easy
+to do so.  Just ignore RAWSCAN_RESULT's with result types of
+`rt_start_longline`, `rt_within_longline` or `rt_longline_ended`,
+as described in doc/HowToUse.md.
 
 ### not safely multi-threaded (sorry)
 
-The use of *`rawscan`* on any particular input stream should be single
-threaded.  Multiple parallel threads trying to access and update
-the same *`rawscan`* stream will likely corrupt the `RAWSCAN` control
-structure, and might prematurely invalidate some line being returned
-to another thread.
+The use of *`rawscan`* on any particular input stream should be
+single threaded.  Multiple parallel threads trying to access and
+update the same *`rawscan`* stream will likely confuse the `RAWSCAN`
+control structure for that stream, and might prematurely overwrite
+some data still being used by another thread.
 
 ### rawmemchr
 

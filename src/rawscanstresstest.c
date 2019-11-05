@@ -45,44 +45,60 @@ int write_failed()
 
 void rawscanstresstest(const char *fname, int fd)
 {
-    long int x;
-    int linenum = 0;
-    int next_line_to_write = 1;
-    int skip_n = 1;
+    const char *p, *q;
+    size_t x;
 
     allow_rawscan_force_bufsz_env = true;
 
 #   define default_buffer_size (16*4096)
     RAWSCAN *rsp = rs_open(fd, default_buffer_size, '\n');
+    rs_enable_pause(rsp);
+    p = q = NULL;
+
     for (;;) {
         RAWSCAN_RESULT rt = rs_getline(rsp);
-
         switch (rt.type) {
             case rt_full_line:
-                linenum++;
                 // fall through ...
             case rt_start_longline:
                 // fall through ...
             case rt_within_longline: {
-                if (linenum == next_line_to_write) {
-                    next_line_to_write += skip_n;
-                    skip_n *= 2;
-                    x = (rt.line.end - rt.line.begin + 1);
-                    if (write(1, rt.line.begin, x) != x)
-                        write_failed();
+                if (p == q) {
+                    p = rt.line.begin;
+                    q = rt.line.end + 1;
+                } else {
+                    if (q != rt.line.begin) {
+                        fprintf(stderr, "Mismatched oldq %p, newq %p\n", p, rt.line.begin);
+                        exit(1);
+                    }
+                    q = rt.line.end + 1;
                 }
                 break;
             }
-            case rt_longline_ended: {
-                linenum++;
+            case rt_longline_ended:
+                break;
+            case rt_paused: {
+                x = q - p;
+                if (x > 0) {
+                    if (write(1, p, x) != x) {
+                        perror("write");
+                        exit(1);
+                    }
+                }
+                p = q = NULL;
+                rs_resume_from_pause(rsp);
                 break;
             }
-            case rt_paused:
-                fprintf(stderr,"unexpected pause\n");
+            case rt_eof: {
+                x = q - p;
+                if (x > 0) {
+                    if (write(1, p, x) != x) {
+                        perror("write");
+                        exit(1);
+                    }
+                }
                 goto do_return;
-            case rt_eof:
-                // printf("%ld\t%s\n", llen, fname);
-                goto do_return;
+            }
             case rt_err:
                 fprintf(stderr, "%s: %s\n", fname, strerror(rt.errnum));
                 goto do_return;

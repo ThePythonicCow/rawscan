@@ -41,23 +41,24 @@ typedef struct {
     bool eof_seen;         // eof seen - can no longer read into buffer
     bool err_seen;         // read err seen - can no longer read into buffer
     int errnum;            // errno of last read if failed
-    bool pause_on_inval;   // set "is_paused" when need to invalidate buffer
+    bool pause_on_inval;   // pause when need to invalidate buffer
+    bool resume_now;       // resume from current pause
 } RAWSCAN;
 
 enum rs_result_type {
-     // The RAWSCAN_RESULT->line begin and end fields are valid:
-     rt_full_line,          // one entire line
-     rt_start_longline,     // first chunk in a long line
-     rt_within_longline,    // another chunk in this long line
-     rt_longline_ended,     // no more chunks in this long line
+    // The RAWSCAN_RESULT->line begin and end fields are valid:
+    rt_full_line,          // one entire line
+    rt_start_longline,     // first chunk in a long line
+    rt_within_longline,    // another chunk in this long line
+    rt_longline_ended,     // no more chunks in this long line
 
-     // No further RAWSCAN_RESULT fields are valid:
-     rt_paused,             // getline()'s a no-op until resume called
-     rt_eof,                // end of file, no more data available
+    // No further RAWSCAN_RESULT fields are valid:
+    rt_paused,             // getline()'s a no-op until resume called
+    rt_eof,                // end of file, no more data available
 
-     // The RAWSCAN_RESULT->errnum field is valid:
-     rt_err,                // end of data due to read error
- };
+    // The RAWSCAN_RESULT->errnum field is valid:
+    rt_err,                // end of data due to read error
+};
 
 /*
  * rs_getline() returns a copy of the following structure:
@@ -79,10 +80,12 @@ typedef struct {
 RAWSCAN *rs_open (
   int fd,              // read input from this (already open) file descriptor
   size_t bufsz,        // handle lines at least this many bytes in one chunk
-  char delimiterbyte); // newline '\n' or other char marking end of "lines"
+  char delimiterbyte   // newline '\n' or other byte marking end of "lines"
+);
 
 void rs_close(RAWSCAN *rsp);
 void rs_enable_pause(RAWSCAN *rsp);
+void rs_disable_pause(RAWSCAN *rsp);
 void rs_resume_from_pause(RAWSCAN *rsp);
 RAWSCAN_RESULT rs_getline (RAWSCAN *rsp);
 

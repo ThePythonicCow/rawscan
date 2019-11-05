@@ -118,17 +118,16 @@
  *
  * The rawscan calling routine can gain some control over when the
  * contents of the buffer are invalidated by using the optional
- * pause/resume states.  First invoke rs_enable_pause() on
- * the RAWSCAN stream.  Then whenever a rs_getline() or
- * similar call needs to invalidate the current contents of the
- * buffer for that stream, that rs_getline() call will
- * instead return with a RAWSCAN_RESULT.type of rt_paused, without
- * invalidating the current buffer contents.  When the calling
- * routine has finished whatever operations or copied out whatever
- * data that access the RAWSCAN buffer, it can then call the
- * rs_resume_from_pause() function on that stream, which will
- * unpause the stream and enable subsequent rs_getline()
- * calls to succeed again.
+ * pause/resume states.  First invoke rs_enable_pause() on the
+ * RAWSCAN stream.  Then whenever a rs_getline() or similar call
+ * needs to invalidate the current contents of the buffer for
+ * that stream, that rs_getline() call will instead return with
+ * a RAWSCAN_RESULT.type of rt_paused, without invalidating the
+ * current buffer contents.  When the calling routine has finished
+ * using or copying out whatever data it's still needs from the
+ * RAWSCAN buffer, it can then call the rs_resume_from_pause()
+ * function on that stream, which will unpause the stream and enable
+ * subsequent rs_getline() calls to succeed again.
  *
  * For applications that can ignore overly long lines, the rawscan
  * interface makes that quick and easy to do so.  Just ignore
@@ -200,7 +199,7 @@
 
 #include "rawscan.h"
 
-bool allow_rawscan_force_bufsz_env = false;
+bool allow_rawscan_force_bufsz_env = true;
 
 RAWSCAN *rs_open (
   int fd,              // read input from this file descriptor
@@ -324,6 +323,7 @@ RAWSCAN *rs_open (
     rsp->err_seen = false;
     rsp->errnum = 0;
     rsp->pause_on_inval = false;
+    rsp->resume_now = false;
 
     assert (((uintptr_t)arenatop % pgsz) == 0);
     assert (((uintptr_t)(rsp->bufbtop) % pgsz) == 0);
@@ -347,9 +347,15 @@ void rs_enable_pause(RAWSCAN *rsp)
     rsp->pause_on_inval = true;
 }
 
-void rs_resume_from_pause(RAWSCAN *rsp)
+void rs_disable_pause(RAWSCAN *rsp)
 {
     rsp->pause_on_inval = false;
+    rsp->resume_now = false;
+}
+
+void rs_resume_from_pause(RAWSCAN *rsp)
+{
+    rsp->resume_now = true;
 }
 
 /*
@@ -399,6 +405,25 @@ void rs_resume_from_pause(RAWSCAN *rsp)
  * rt_longline_ended)" after the last line.  If rs_getline() is
  * called one more time on such a stream, then the type field for
  * that result will finally be set to "rt_eof".
+ *
+ * Regarding the "reset pause/resume logic" that appears a few times
+ * below, here's the sequence of events that result in this reset:
+ *
+ *  1) rawscan pauses incoming processing, to not overwrite
+ *      already returned data the caller might still be using
+ *  2) caller copies out or finishes using any such data
+ *  3) caller invokes the rs_resume_from_pause() call
+ *      to tell rawscan it's done with any such buffered data
+ *  4) rs_resume_from_pause() sets "rsp->resume_now = true;"
+ *      telling rawscan that it is safe to overwrite buffered
+ *      data in order to reuse buffer space
+ *  5) "rsp->resume_now" is left set to "true" for a while,
+ *      preventing more pauses
+ *  6) only when rt_getline() is about to return more data
+ *      (either as a full line or a chunk of a long line)
+ *      will it set "rsp->resume_now = false;", once again
+ *      enabling a pause to happen, the next time that rawscan
+ *      has to overwrite more of what it's already returned.
  */
 
 // Private helper routines used by rs_getline():
@@ -410,7 +435,7 @@ func_static RAWSCAN_RESULT rawscan_full_line(RAWSCAN *rsp)
     // *(rsp->end_this_chunk) is either a delimiterbyte or
     //    else we're at end of file and it's the last byte.
 
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
     assert(rsp->p != NULL);
     assert(rsp->next_val_p != NULL);
@@ -422,36 +447,38 @@ func_static RAWSCAN_RESULT rawscan_full_line(RAWSCAN *rsp)
     assert(rsp->end_this_chunk <= rsp->bufbtop);
     assert(*rsp->end_this_chunk == rsp->delimiterbyte || rsp->eof_seen);
 
-    resp.type = rt_full_line;
-    resp.line.begin = rsp->p;
-    resp.line.end = rsp->end_this_chunk;
+    rt.type = rt_full_line;
+    rt.line.begin = rsp->p;
+    rt.line.end = rsp->end_this_chunk;
 
     rsp->p = rsp->next_val_p;
     rsp->end_this_chunk = NULL;     // force rs_getline to set again
     rsp->next_val_p = NULL;         // force rs_getline to set again
 
-    return resp;
+    rsp->resume_now = false;        // reset pause/resume logic
+
+    return rt;
 }
 
 func_static RAWSCAN_RESULT rawscan_eof(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
-    resp.type = rt_eof;
+    rt.type = rt_eof;
     rsp->eof_seen = true;
 
-    return resp;
+    return rt;
 }
 
 func_static RAWSCAN_RESULT rawscan_err(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
-    resp.type = rt_err;
-    resp.errnum = rsp->errnum;
+    rt.type = rt_err;
+    rt.errnum = rsp->errnum;
     assert(rsp->err_seen == true);
 
-    return resp;
+    return rt;
 }
 
 func_static void rawscan_read (RAWSCAN *rsp)
@@ -472,7 +499,7 @@ func_static void rawscan_read (RAWSCAN *rsp)
 
 func_static RAWSCAN_RESULT rawscan_start_of_longline(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
     assert(rsp->p != NULL);
     assert(rsp->next_val_p != NULL);
@@ -483,9 +510,9 @@ func_static RAWSCAN_RESULT rawscan_start_of_longline(RAWSCAN *rsp)
     assert(rsp->in_longline == false);
     assert(rsp->longline_ended == false);
 
-    resp.type = rt_start_longline;
-    resp.line.begin = rsp->p;
-    resp.line.end = rsp->end_this_chunk;
+    rt.type = rt_start_longline;
+    rt.line.begin = rsp->p;
+    rt.line.end = rsp->end_this_chunk;
 
     rsp->p = rsp->next_val_p;
 
@@ -495,12 +522,14 @@ func_static RAWSCAN_RESULT rawscan_start_of_longline(RAWSCAN *rsp)
     rsp->end_this_chunk = NULL;     // force rs_getline to set again
     rsp->next_val_p = NULL;         // force rs_getline to set again
 
-    return resp;
+    rsp->resume_now = false;        // reset pause/resume logic
+
+    return rt;
 }
 
 func_static RAWSCAN_RESULT rawscan_within_longline(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
     assert(rsp->p != NULL);
     assert(rsp->next_val_p != NULL);
@@ -511,20 +540,22 @@ func_static RAWSCAN_RESULT rawscan_within_longline(RAWSCAN *rsp)
 
     assert(rsp->p <= rsp->end_this_chunk);       // non-empty return chunk
 
-    resp.type = rt_within_longline;
-    resp.line.begin = rsp->p;
-    resp.line.end = rsp->end_this_chunk;
+    rt.type = rt_within_longline;
+    rt.line.begin = rsp->p;
+    rt.line.end = rsp->end_this_chunk;
     rsp->p = rsp->next_val_p;
 
     rsp->end_this_chunk = NULL;     // force rs_getline to set again
     rsp->next_val_p = NULL;         // force rs_getline to set again
 
-    return resp;
+    rsp->resume_now = false;        // reset pause/resume logic
+
+    return rt;
 }
 
 func_static RAWSCAN_RESULT rawscan_terminate_longline(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
     // To keep the interface to rs_getline() simple(r),
     // we never both (1) return another chunk of a longline, and
@@ -547,19 +578,20 @@ func_static RAWSCAN_RESULT rawscan_terminate_longline(RAWSCAN *rsp)
     rsp->in_longline = false;
     rsp->longline_ended = false;
 
-    resp.type = rt_longline_ended;
-    resp.line.begin = resp.line.end = NULL;
+    rt.type = rt_longline_ended;
+    rt.line.begin = rt.line.end = NULL;
 
-    return resp;
+    return rt;
 }
 
-func_static RAWSCAN_RESULT rawscan_activate_pause()
+func_static RAWSCAN_RESULT rawscan_paused(RAWSCAN *rsp)
 {
-    RAWSCAN_RESULT resp;
+    RAWSCAN_RESULT rt;
 
-    resp.type = rt_paused;
+    assert(rsp->resume_now == false);
+    rt.type = rt_paused;
 
-    return resp;
+    return rt;
 }
 
 func_static void rawscan_shift_buffer_contents_down(RAWSCAN *rsp)
@@ -585,6 +617,19 @@ func_static void rawscan_shift_buffer_contents_down(RAWSCAN *rsp)
     rsp->q = new_q;
 }
 
+func_static RAWSCAN_RESULT rawscan_handle_part_of_longline(
+    RAWSCAN *rsp, const char *end_this_part)
+{
+    rsp->end_this_chunk = end_this_part - 1;
+    rsp->next_val_p = end_this_part;
+
+    if (rsp->in_longline) {
+        return rawscan_within_longline(rsp);
+    } else {
+        return rawscan_start_of_longline(rsp);
+    }
+}
+
 func_static RAWSCAN_RESULT rawscan_handle_end_of_longline(RAWSCAN *rsp)
 {
     // If we come upon the end of a longline, either by finding a
@@ -608,6 +653,29 @@ func_static RAWSCAN_RESULT rawscan_handle_end_of_longline(RAWSCAN *rsp)
     }
 }
 
+// Note for "tricky corner case" in rs_getline() code:
+//
+//    We have a last line w/o trailing newline -and- that line goes
+//    right to the end of bufb.
+//
+//    Avoid returning that line as is, because that would make it
+//    impossible for the caller to add a prosthetic trailing newline
+//    (or nul or other useful delimiter) in the byte right after the
+//    end of this last line.  Caller can NOT write into the read-only
+//    sentinel delimiterbyte at buftop.
+//
+//    So either shift that last line down into bufa (if bufa is
+//    available), or else return only part of that last line (all but
+//    last byte), as the beginning, or continuation, of a long line,
+//    which will allow a future call to return the last part (just
+//    the last byte) after a shift down into bufa.
+//
+//    When caller finally sees that rt_longline_ended for a long line
+//    that didn't end in a delimiterbyte, the caller will have space
+//    to tack on a useful prosthetic trailing newline or nul byte,
+//    if they want.
+
+
 // verbose bool flags for current RAWSCAN status:
 
 typedef struct {
@@ -617,7 +685,6 @@ typedef struct {
     bool have_bytes_in_p_q;
     bool have_space_above_q;
     bool have_free_bufa;
-    bool paused;
 } rawscan_internal_status_t;
 
 RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
@@ -635,14 +702,16 @@ RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
     if (rsp->p < rsp->q &&
         ! rsp->in_longline &&
         (next_delim_ptr = rawmemchr(rsp->p, rsp->delimiterbyte)) < rsp->q) {
-            RAWSCAN_RESULT resp;
+            RAWSCAN_RESULT rt;
 
-            resp.type = rt_full_line;
-            resp.line.begin = rsp->p;
-            resp.line.end = next_delim_ptr;
+            rt.type = rt_full_line;
+            rt.line.begin = rsp->p;
+            rt.line.end = next_delim_ptr;
             rsp->p = next_delim_ptr + 1;
 
-            return resp;
+            rsp->resume_now = false;        // reset pause/resume logic
+
+            return rt;
     }
 
     pstat = &status_struct;
@@ -692,13 +761,33 @@ RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
         }
     } else if (pstat->end_of_input_seen) {
         if (pstat->have_more_chars_in_buf) {
-            // Get here if last line of input lacks trailing newline.
-            rsp->end_this_chunk = rsp->q - 1;
-            rsp->next_val_p = rsp->q;
-            if (rsp->in_longline) {
-                return rawscan_handle_end_of_longline(rsp);
+            if (pstat->have_space_above_q) {
+                // Get here if last line of input lacks trailing
+                // newline, -and- there's at least one unused byte
+                // above q in the buffer, where the caller could
+                // write a prosthetic trailing delimiter, if that
+                // would be useful to them.  So return it.
+                rsp->end_this_chunk = rsp->q - 1;
+                rsp->next_val_p = rsp->q;
+                if (rsp->in_longline) {
+                    return rawscan_handle_end_of_longline(rsp);
+                } else {
+                    return rawscan_full_line(rsp);
+                }
             } else {
-                return rawscan_full_line(rsp);
+                // See "tricky corner case" note, above.
+                if (pstat->have_free_bufa) {
+                    if (rsp->pause_on_inval && !rsp->resume_now) {
+                        return rawscan_paused(rsp);
+                    } else {
+                        rawscan_shift_buffer_contents_down(rsp);
+                        goto loop;
+                    }
+                } else {
+                    // Return all but last byte of last line as
+                    // either start or continuation of long line.
+                    return rawscan_handle_part_of_longline(rsp, rsp->q - 1);
+                }
             }
         } else if (rsp->in_longline) {
             rsp->longline_ended = true;
@@ -713,28 +802,21 @@ RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
         goto loop;
     } else if (pstat->have_bytes_in_p_q) {
         if (pstat->have_free_bufa) {
-            if (rsp->pause_on_inval) {
-                return rawscan_activate_pause();
+            if (rsp->pause_on_inval && !rsp->resume_now) {
+                return rawscan_paused(rsp);
             } else {
                 rawscan_shift_buffer_contents_down(rsp);
                 goto loop;
             }
-        } else if (rsp->in_longline) {
-            rsp->end_this_chunk = rsp->q - 1;
-            rsp->next_val_p = rsp->q;
-            return rawscan_within_longline(rsp);
         } else {
-            // We're starting a long line that doesn't all fit in buffers.
-            rsp->end_this_chunk = rsp->bufbtop - 1;
-            rsp->next_val_p = rsp->q;
-            return rawscan_start_of_longline(rsp);
+            return rawscan_handle_part_of_longline(rsp, rsp->q);
         }
     } else {
         // We have more input, but no where to put it.  Our buffers
         // are stuffed with lines we've already returned to our caller.
         // Time to reset buffers.
-        if (rsp->pause_on_inval) {
-            return rawscan_activate_pause();
+        if (rsp->pause_on_inval && !rsp->resume_now) {
+            return rawscan_paused(rsp);
         } else {
             rsp->p = rsp->q = rsp->bufb;    // reset buffers
             goto loop;
