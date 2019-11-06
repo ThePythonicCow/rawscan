@@ -38,6 +38,14 @@ write_basic_package_version_file(
 ## parts per thousand (0.3 to 0.4%) faster (lower user CPU time)
 ## than the shared ("SHARED") build.  So I will default to SHARED,
 ## as shared libraries are the more common convention.
+##
+## However, in another test I saw more difference.
+## The key was whether I was writing out all lines I input,
+## or just a small portion.  If writing all the lines, then
+## the difference in performance between static and shared
+## was minor, but if just writing a very small, select
+## portion of the input lines, then static linking had a
+## bigger advantage.
 
 add_library(rawscan SHARED)
 # add_library(rawscan OBJECT)
@@ -60,7 +68,7 @@ target_compile_options(rawscan PRIVATE
 )
 
 add_executable(rawscantest)
-target_sources(rawscantest PRIVATE tests/rawscanstresstest.c)
+target_sources(rawscantest PRIVATE tests/rawscantest.c)
 target_link_libraries(rawscantest PRIVATE rawscan)
 
 add_executable(random_line_generator)

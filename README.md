@@ -6,7 +6,8 @@ by a designated delimiter byte.
 
 Use the *`rawscan`* library routines `rs_open`(), `rs_getline`(), and
 `rs_close`() to read input, line by line, from any any input stream
-(any readable open file descriptor).  See doc/HowToUse.md for the details of how to use *`rawscan`*.
+(any readable open file descriptor).  See doc/HowToUse.md for the
+details of how to use *`rawscan`*.
 
 *`Rawscan`*'s advantages include:
 
@@ -186,7 +187,7 @@ buffer until the application dies of memory exhaustion, or until
 the supporting system slows unacceptably swapping a huge program.
 
 Rust's [LineReader](https://crates.io/crates/linereader) is the
-closest equivalent to rawscan that I've found so far.  However it
+closest equivalent to *`rawscan`* that I've found so far.  However it
 will split lines that wrap around the end of the buffer, even if
 the line could otherwise have fit in the buffer, had it been at a
 different offset.
@@ -194,10 +195,68 @@ different offset.
 Instead, *`rawscan`* never splits lines that it can fit in its buffer,
 and never reallocates a bigger buffer than initially allocated in
 the `rs_open`() call.  If an input line that would have fit in
-the buffer would spill off the end of the buffer, rawscan will
+the buffer would spill off the end of the buffer, *`rawscan`* will
 shift that partially read line lower in the buffer and continue
 reading the rest of it into the buffer, before returning the whole
 line in one piece.
+
+# Comparative Performance
+
+The following test case highlights *`rawscan`*'s strengths.
+
+The input file held 55,626,370 (55.6 million) lines of text,
+and had a size of 11,266,624,053 (11.3 Gb) bytes.  The shortest
+line was 82 bytes long and the longest line was 2525 bytes long.
+Each line started with a long ASCII hex number over the alphabet
+[0-9a-f].  These initial numbers were largely, but not entirely,
+random in order and value.
+
+A pattern was chosen that would be easy to code for in various
+ways, and that would only match a few lines, so as to focus the
+performance timings on the cost of reading and distinguishing each
+line, not on searching within each line for a pattern, and not on
+writing out the successful matches.
+
+The pattern matched lines beginning with the eight hex characters
+"6fffbf42", using strncmp() to look for the pattern, or using
+the pattern "^6fffbf42" (anchored to start of line) with grep.
+This pattern matched 8 out of the 55,626,370 lines.
+
+Here's the user CPU times, on a Ryzen 1700 with plenty of RAM and
+and with the input file (all 11.2+ GBytes of it) already loaded
+into RAM, for each of grep and three small programs coded to use
+fgets, getline, and rawscan. Times are averages of 10 runs, using
+"nice -n-10" to get higher CPU priority, which resulted in fairly
+consistent times from run to run (except for "grep", as noted below.)
+
+    ----------------------
+    | Routine | CPU secs |
+    | ------- | -------: |
+    |   grep  |   4.38   |
+    |  fgets  |   2.61   |
+    | getline |   2.36   |
+    | rawscan |   1.60   |
+    ----------------------
+
+The "grep" runs displayed an anomaly that I don't understand.
+About 90% of the grep runs used very close to 4.38 seconds,
+while the other 10% of them used very close to 7.10 seconds.
+In the above table, I gave grep a [mulligan](https://www.merriam-webster.com/dictionary/mulligan)
+for those runs that took over 7 seconds.)
+
+As you can see from the above table, **rawscan shaves about 30% to
+40% off the user CPU times** of the fgets and getline based code.
+
+Rawscan does this without having fgets' problems with embedded nuls,
+getline's potentially unbounded malloc's (or leaving difficult to
+code reallocations to the caller, as fgets does), or the potential
+for dangerous buffer overruns (as gets and some scanf formats do).
+
+Rawscan also provides more sophisticated options for managing
+memory usage, from very small pre-allocated buffers that require
+no malloc runtime, to sufficiently large buffers to contain the
+entire input, directly accessible in memory (without falling
+apart when an even larger than expected input shows up.)
 
 # Project Origins:
 
