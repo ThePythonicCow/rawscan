@@ -32,7 +32,16 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
+## In one test, I could detect a barely significant performance
+## difference between linking rawscan as a shared library versus a
+## static library.  The static ("OBJECT") build was about 3 or 4
+## parts per thousand (0.3 to 0.4%) faster (lower user CPU time)
+## than the shared ("SHARED") build.  So I will default to SHARED,
+## as shared libraries are the more common convention.
+
 add_library(rawscan SHARED)
+# add_library(rawscan OBJECT)
+
 target_sources(
     rawscan
     PRIVATE lib/rawscan.c
@@ -45,13 +54,13 @@ target_compile_options(rawscan PRIVATE
     $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
         -pipe -march=native
         $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>>
-        $<$<CONFIG:Release>:-O3 >>
-    $<$<C_COMPILER_ID:MSVC>:
-        $<$<CONFIG:Debug>:/Od /Wall /Zi>>
+        $<$<CONFIG:Release>:-O3>
+
+    $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
 )
 
 add_executable(rawscantest)
-target_sources(rawscantest PRIVATE src/rawscanstresstest.c)
+target_sources(rawscantest PRIVATE tests/rawscanstresstest.c)
 target_link_libraries(rawscantest PRIVATE rawscan)
 
 add_executable(random_line_generator)
