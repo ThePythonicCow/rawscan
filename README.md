@@ -231,7 +231,7 @@ consistent times from run to run (except for "grep", as noted below.)
 
     ----------------------
     | Routine | CPU secs |
-    | ------- | -------: |
+    | ------- | -------- |
     |   grep  |   4.38   |
     |  fgets  |   2.61   |
     | getline |   2.36   |
