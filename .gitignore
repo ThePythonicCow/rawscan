@@ -58,7 +58,6 @@ CMakeFiles/
 /cmake_install.cmake
 Makefile
 /CMakeCache.txt
-todo
 build/**
 !build/empty.txt
 !build/RawscanConfigVersion.cmake

@@ -14,3 +14,7 @@
  - Handling constrained memory configurations (disabling full readonly page for sentinel)
  - Caller controlled resizing of buffer
  - Caller controlled shifting of data down, for limited multiline record support
+ - man page
+ - code coverage
+ - add awk to comparison timings
+ - test script varying buffer size, input line count, and total byte count from random line input
