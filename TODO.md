@@ -18,3 +18,5 @@
  - code coverage
  - add awk to comparison timings
  - test script varying buffer size, input line count, and total byte count from random line input
+ - support user supplied input routine as option to read(2) from a file descriptor.
+ - should be able to rs_getline's from a read-only array in ROM
