@@ -1,1 +1,0 @@
-This file keeps .git from ignoring this subdirectory.
