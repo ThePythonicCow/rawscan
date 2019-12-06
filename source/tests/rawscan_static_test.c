@@ -1,7 +1,7 @@
-#include <rawscan.h>
+#include <rawscan_static.h>
 
 /*
- * < input rawscan_test > output
+ * < input rawscan_static_test > output
  *
  * Paul Jackson
  * pj@usa.net

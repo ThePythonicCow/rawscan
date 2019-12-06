@@ -57,7 +57,7 @@ target_compile_options(rawscan PRIVATE
     $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
 )
 
-add_subdirectory(tests EXCLUDE_FROM_ALL)
+add_subdirectory(tests)
 
 include(GNUInstallDirs)
 
