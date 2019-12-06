@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Run this script one time to initialize a Release build using Unix
+# Makefiles here.
+#
+# This script will have cmake generate a Unix Makefile and then
+# build a Release version of rawscan using that Makefile.
+#
+# Once this script is run, subsequent rebuilds can be done by issuing
+# the simple command "make" in this directory.  Cmake remembers in
+# the CMakeCache.txt file that it creates in this directory that it
+# is to build "Release" versions, and the Makefile that it generated
+# does that.
+#
+# Furthermore, this Release build can then be installed on the
+# present system by issuing "make install" as root.
+#
+# Paul Jackson
+# pj@usa.net
+# 5 Dec 2019
+
+cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE:STRING=Release ../source
+cmake --build . --config Release

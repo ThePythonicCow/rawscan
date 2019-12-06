@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# Run this script one time to initialize a Debug build using Unix
+# Makefiles here.
+#
+# This script will have cmake generate a Unix Makefile and then
+# build a Debug version of rawscan using that Makefile.
+#
+# Once this script is run, subsequent rebuilds can be done by issuing
+# the simple command "make" in this directory.  Cmake remembers in
+# the CMakeCache.txt file that it creates in this directory that it
+# is to build "Debug" versions, and the Makefile that it generated
+# does that.
+#
+# Paul Jackson
+# pj@usa.net
+# 5 Dec 2019
+
+cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE:STRING=Debug ../source
+cmake --build . --config Debug
