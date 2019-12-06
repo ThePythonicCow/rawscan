@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 # Intention: Use "Semantic Versioning", as documented at https://semver.org/
-set(RAWSCAN_VERSION 0.1.3)
+set(RAWSCAN_VERSION 0.1.4)
 
 project(
     rawscan
