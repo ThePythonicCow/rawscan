@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
+# Intention: Use "Semantic Versioning", as documented at https://semver.org/
 set(RAWSCAN_VERSION 0.1.3)
 
 project(
@@ -32,23 +33,10 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-## In one test, I could detect a barely significant performance
-## difference between linking rawscan as a shared library versus a
-## static library.  The static ("OBJECT") build was about 3 or 4
-## parts per thousand (0.3 to 0.4%) faster (lower user CPU time)
-## than the shared ("SHARED") build.  So I will default to SHARED,
-## as shared libraries are the more common convention.
-##
-## However, in another test I saw more difference.
-## The key was whether I was writing out all lines I input,
-## or just a small portion.  If writing all the lines, then
-## the difference in performance between static and shared
-## was minor, but if just writing a very small, select
-## portion of the input lines, then static linking had a
-## bigger advantage.
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
 
 add_library(rawscan SHARED)
-# add_library(rawscan OBJECT)
 
 target_sources(
     rawscan
@@ -56,7 +44,9 @@ target_sources(
     PUBLIC include/rawscan.h
 )
 target_include_directories(rawscan PUBLIC include)
-target_compile_features(rawscan PRIVATE c_std_11)
+
+# need >= C11 for anon union in rawscan.h
+target_compile_features(rawscan PUBLIC c_std_11)
 
 target_compile_options(rawscan PRIVATE
     $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
@@ -67,12 +57,7 @@ target_compile_options(rawscan PRIVATE
     $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
 )
 
-add_executable(rawscantest)
-target_sources(rawscantest PRIVATE tests/rawscantest.c)
-target_link_libraries(rawscantest PRIVATE rawscan)
-
-add_executable(random_line_generator)
-target_sources(random_line_generator PRIVATE tests/random_line_generator.c)
+add_subdirectory(tests EXCLUDE_FROM_ALL)
 
 include(GNUInstallDirs)
 
