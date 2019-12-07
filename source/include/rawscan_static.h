@@ -239,7 +239,9 @@
  * source from this rawscan_static.h header file.
  */
 
-#define profiling_this_code 1   // set to '1' and rebuild to profile
+#ifndef profiling_this_code
+#define profiling_this_code 0   // set to '1' and rebuild to profile
+#endif
 
 #if profiling_this_code || building_rawscan_dynamic_library
 #define func_static
