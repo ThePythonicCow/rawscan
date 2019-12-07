@@ -1,0 +1,7 @@
+#!/usr/bin/env python2
+
+import os
+input = os.fdopen(0,'rb')
+for line in input:
+  if line[0:3] == b"abc":
+    os.write(1, line);
