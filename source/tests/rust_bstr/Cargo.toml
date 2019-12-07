@@ -1,0 +1,10 @@
+[package]
+name = "rust_bstr"
+version = "0.1.0"
+authors = ["Paul Jackson <pj@usa.net>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bstr = "0.2"
