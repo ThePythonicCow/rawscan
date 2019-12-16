@@ -1,0 +1,49 @@
+"Rawscan" provides a robust, high performance "line reader"
+routine for use in C code.  It is faster than the usual
+gets(), fgets() or getline() alternatives, and is designed
+with the expectation of being more resistant to buffer
+overflow and input parsing bugs.
+
+Installation Instructions
+=========================
+
+Most users of this rawscan library will only need to
+build one of the several alternatives available here.
+
+In particular, most users and even developers of
+tools using rawscan will only need to:
+
+    cd Makefile-Release
+    sh cmake_config_and_build
+    sudo make install
+
+You will need 'cmake' installed for the above to work.
+
+The above will build an optimized version of the
+librawscan.so shared library, and install that
+library, along with the rawscan header files and
+man page.
+
+If you have and prefer using Ninja instead of Make,
+then replace "Makefile" with "Ninja", and "make" with
+"ninja", in the above instructions.
+
+If you wish to develop, test or debug rawscan, you
+can replace "Release" with "Debug" in the above,
+in order to build variants with unstripped symbols
+and less aggressive optimizations, that are more
+suitable for such development work.
+
+If you have Rust's  "rustc" and "cargo" installed on
+your system and you wish to reproduce the performance
+results for a Rust command that uses either bstr or
+bufreader, then you can build the desired rust binary
+and place the resulting target binary in one of the
+rust-{bstr,bufreader}-{Debug,Release} directories,
+where the "compare_various_apis.sh" benchmark script
+will find them and include their results.  For example,
+the following commands rebuild the "Release" (optimized)
+variant using "bstr":
+
+    cd ../source/tests/rust_bstr
+    cargo build --release --target-dir ../../../builds/rust_bstr-Release

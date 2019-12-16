@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.13)
 add_executable(rawscan_test)
 target_sources(rawscan_test PRIVATE rawscan_test.c)
 target_link_libraries(rawscan_test PRIVATE rawscan)
@@ -15,3 +16,8 @@ target_sources(getline_test PRIVATE getline_test.c)
 
 add_executable(random_line_generator)
 target_sources(random_line_generator PRIVATE random_line_generator.c)
+
+configure_file(compare_various_apis.sh compare_various_apis COPYONLY)
+configure_file(summarize_results.sh summarize_results COPYONLY)
+configure_file(python2_test python2_test COPYONLY)
+configure_file(python3_test python3_test COPYONLY)

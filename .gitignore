@@ -51,5 +51,27 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-build-*-*/**
-!build-*-*/cmake_config_and_build
+# Stuff added specific to rawscan
+builds/*-*/**
+!builds/HOWTO_BUILD_AND_INSTALL
+!builds/*-*/cmake_config_and_build
+
+test_results/**
+!test_results/HOWTO_RUN_TESTS
+
+# Rawscan is essentially a library - so don't ship Cargo.lock
+# as we don't want to lock users of rawscan into whatever
+# tool versions we used to build rawscan.
+Cargo.lock
+
+# Files created by tools that I, Paul Jackson, use in developing rawscan
+
+#  Visual Studio Code project file
+Rawscan.workspace.code-workspace
+
+# The C/C++ Intellisense extension of Visual Studio Code requires
+# GNU's global gtag tool, which creates these "G*" files in
+# the top directory of this rawscan project.
+GPATH
+GRTAGS
+GTAGS

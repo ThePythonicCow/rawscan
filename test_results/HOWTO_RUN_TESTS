@@ -1,0 +1,11 @@
+# Replace "Makefile-Release" with other build, as desired
+
+# change to the directory containing this HOWTO_RUN_TESTS.md file
+cd tests_results                                
+
+# put built binaries on PATH (Replace "Makefile-Release" with other
+# build, as desired)
+export PATH=../builds/Makefile-Release/tests:$PATH
+
+# execute test script wrapper
+compare_various_apis

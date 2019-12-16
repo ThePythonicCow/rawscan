@@ -19,5 +19,5 @@
 # pj@usa.net
 # 5 Dec 2019
 
-cmake -G "Ninja" -DCMAKE_BUILD_TYPE:STRING=Release ../source
-cmake --build . --config Release
+cmake -G "Ninja" -DCMAKE_BUILD_TYPE:STRING=Release ../../source
+cmake --build .

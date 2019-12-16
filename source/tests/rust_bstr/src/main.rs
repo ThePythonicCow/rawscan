@@ -1,6 +1,8 @@
 // Following Rust code adapted from an example at:
+//     https://crates.io/crates/bstr
 //
-//      https://crates.io/crates/bstr
+// See also:
+//     https://docs.rs/bstr/0.2.8/bstr/io/trait.BufReadExt.html#method.for_byte_line_with_terminator
 //
 // I replaced "contains_str" with "starts_with", and
 // replaced the search pattern "Dimension" with the

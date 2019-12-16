@@ -64,14 +64,6 @@
 #define __USE_GNU
 #include <string.h>
 
-#ifndef _bool_defined_
-#define _bool_defined_
-    typedef enum {
-        false,
-        true
-    } bool;
-#endif
-
 // cmake debug builds enable asserts (NDEBUG not defined),
 // whereas cmake release builds define NDEBUG to disable asserts.
 #include <assert.h>
@@ -240,7 +232,7 @@
  */
 
 #ifndef profiling_this_code
-#define profiling_this_code 0   // set to '1' and rebuild to profile
+#define profiling_this_code 0   // define as '1' and rebuild to profile
 #endif
 
 #if profiling_this_code || building_rawscan_dynamic_library
@@ -359,7 +351,7 @@ func_static RAWSCAN *rs_open (
         return NULL;
     }
 
-    if ((rsp = calloc(1, sizeof(RAWSCAN))) == NULL) {
+    if ((rsp = (RAWSCAN *)calloc(1, sizeof(RAWSCAN))) == NULL) {
         free(arena);
         return NULL;
     }
@@ -750,7 +742,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
     // but we try to avoid calling it more often than we have to,
     // and we try to avoid rescanning any data twice.
 
-    next_delim_ptr = rawmemchr(start_next_rawmemchr_here, rsp->delimiterbyte);
+    next_delim_ptr = (const char *)rawmemchr(start_next_rawmemchr_here, rsp->delimiterbyte);
     assert(next_delim_ptr != NULL);
 
     // fastpath the two common cases, where performance counts most:
@@ -784,7 +776,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
 
   slow_loop:
 
-    next_delim_ptr = rawmemchr(start_next_rawmemchr_here, rsp->delimiterbyte);
+    next_delim_ptr = (const char *)rawmemchr(start_next_rawmemchr_here, rsp->delimiterbyte);
     assert(next_delim_ptr != NULL);
 
     // Phase 1: Express current status using above verbose terms.
@@ -854,7 +846,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
     } else if (pstat->have_bytes_in_p_q) {
         if (pstat->have_space_below_p) {
             if (rsp->pause_on_inval && !rsp->stop_this_pause) {
-                return rawscan_paused(rsp);
+                return rawscan_paused();
             } else {
                 rawscan_shift_buffer_contents_down(rsp);
                 start_next_rawmemchr_here = rsp->q;
@@ -868,7 +860,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
         // is stuffed with lines we've already returned to our caller.
         // Time to reset buffers, or pause awaiting a resume.
         if (rsp->pause_on_inval && !rsp->stop_this_pause) {
-            return rawscan_paused(rsp);
+            return rawscan_paused();
         } else {
             rsp->p = rsp->q = rsp->buf;    // reset buffers
             start_next_rawmemchr_here = rsp->q;

@@ -1,14 +1,6 @@
 #ifndef _RAWSCAN_H
 #define _RAWSCAN_H 1
 
-#ifndef _bool_defined_
-#define _bool_defined_
-    typedef enum {
-        false,
-        true
-    } bool;
-#endif
-
 // If who ever included us didn't explicitly define "func_static",
 // then make it disappear.  The one known (as of this writing) case
 // defining "func_static" is our inclusion from the rawscan_static.h
@@ -23,6 +15,10 @@
 // stddef.h: needed for "size_t" (long unsigned int)
 
 #include <stddef.h>
+
+// pick up bool, false, true (available in C since C99)
+
+#include <stdbool.h>
 
 /*
  * The internal state of a rawscan stream:

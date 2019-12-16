@@ -16,5 +16,5 @@
 # pj@usa.net
 # 5 Dec 2019
 
-cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE:STRING=Debug ../source
-cmake --build . --config Debug
+cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE:STRING=Debug ../../source
+cmake --build .
