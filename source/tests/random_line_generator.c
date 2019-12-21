@@ -374,7 +374,7 @@ func_static void fatal_usage(char *msg, char *opt)
 
 func_static inline int validnumlines(uint64_t numlines)
 {
-    return numlines > 0 && numlines < ULONG_MAX && errno == 0;
+    return numlines < ULONG_MAX && errno == 0;
 }
 
 func_static inline int validlen(uint64_t len)

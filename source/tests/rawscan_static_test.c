@@ -1,7 +1,7 @@
 #include <rawscan_static.h>
 
 /*
- * < input rawscan_static_test > output
+ * < input rawscan_static_test [-b bufsz] > output
  *
  * Paul Jackson
  * pj@usa.net
@@ -43,15 +43,13 @@ func_static void emit(RAWSCAN_RESULT rt)
             error_exit("rawscan write failed");
 }
 
-func_static void rawscan_test(int fd)
+func_static void rawscan_test(int fd, size_t bufsz)
 {
     RAWSCAN *rsp;
     RAWSCAN_RESULT rt;
     bool good_long_line = false;
 
-#   define default_buffer_size (16*4096)
-
-    if ((rsp = rs_open(fd, default_buffer_size, '\n')) == NULL)
+    if ((rsp = rs_open(fd, bufsz, '\n')) == NULL)
         error_exit("rawscan rs_open memory allocation failure");
 
     for (;;) {
@@ -60,10 +58,17 @@ func_static void rawscan_test(int fd)
 
         switch (rt.type) {
             case rt_full_line:
-            case rt_full_line_without_eol:
-                if (strncmp(rt.line.begin, "abc", 3) == 0)
-                    emit(rt);
+            case rt_full_line_without_eol: {
+                const char *p = rt.line.begin;
+                const char *q = "abc";
+                while (*q) {
+                    if (*p++ != *q++)
+                        goto nomatch;
+                }
+                emit(rt);
+        nomatch:
                 break;
+            }
 
             case rt_start_longline:
                 good_long_line = (strncmp(rt.line.begin, "abc", 3) == 0);
@@ -96,8 +101,33 @@ func_static void rawscan_test(int fd)
     }
 }
 
-int main ()
+#define default_buffer_size (16*4096)
+
+int main (int argc, char **argv)
 {
-    rawscan_test(0);   // 0: read input file descriptor
-    exit(0);           // 0: exit successfully
+    size_t bufsz = default_buffer_size;
+    extern int optind;
+    extern char *optarg;
+    int c;
+
+    while ((c = getopt(argc, argv, "b:")) != EOF) {
+        char *optend;
+
+        switch (c) {
+            case 'b':
+                bufsz = strtoul(optarg, &optend, 0);
+                if (bufsz < 1 || bufsz > (1<<30)) {
+                    fprintf(stderr, "Fatal error: rawscan_static_test: "
+                                    "-b bufsz not in [1, %u]\n", (1<<30));
+                    exit(1);
+                }
+                break;
+            default:
+                fprintf(stderr, "Usage: rawscan_static_test [-b bufsz]\n");
+                exit(1);
+        }
+    }
+
+    rawscan_test(0, bufsz);     // 0: read input file descriptor
+    exit(0);                    // 0: exit successfully
 }
