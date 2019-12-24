@@ -86,6 +86,13 @@ function run_test()
 
         export TIMEFMT="%M,%P,%R,%U,%S,%E"
 
+        # The %P zsh time spec appends a '%' to each value, and the
+        # %U, %S, and %E time specs append a 's' (for seconds).
+        # This is annoying to import into some data analysis tools
+        # that resist seeing these as numbers rather than strings.
+        # So the "sed" command below trims off these trailing '%'
+        # and 's' characters.
+
         # What's up with the crazy fd 1, 2, and 3 redirections:
         #
         # The following:
@@ -130,7 +137,9 @@ function run_test()
             done
 
             echo -n \$nloops, 1>&2
-        " ) 1>&3 ) 2>&1 | while read nloops_and_timings
+        " ) 1>&3 ) 2>&1 |
+        sed -e 's/[s%],/,/g' -e 's/s$//' |  # cut tailing 's' '%' off timings
+        while read nloops_and_timings
             do
                 echo $cmdbasename,$nlines,$linelen,$nloops_and_timings
             done 1>&2
@@ -149,8 +158,6 @@ function run_test()
     do
         for log2nlines in $(seq 3 16)     # number lines 8 to 65536
         do
-        (
-          (
             linelen=$(( 2 ** $log2linelen ))
             nlines=$(( 2 ** $log2nlines ))
             random_line_generator -n $nlines -m $linelen -M $linelen -R > $shm.1
@@ -183,21 +190,24 @@ function run_test()
             # to amortize the cost of generating it.
 
             repeat 10 {
-                cat $shm.1 | run_test  $rust_bstr &
-                cat $shm.1 | run_test  rawscan_test &
-                cat $shm.1 | run_test  rawscan_static_test &
-                cat $shm.1 | run_test  getline_test &
-                cat $shm.1 | run_test  fgets_test &
-                cat $shm.1 | run_test  grep '^abc' &
-                cat $shm.1 | run_test  sed -n '/^abc/p' &
-                cat $shm.1 | run_test  $rust_bufreader &
-                cat $shm.1 | run_test  python2 python2_test &
-                cat $shm.1 | run_test  python3 python3_test &
-                cat $shm.1 | run_test  awk '/^abc/' &
-                wait
+                (
+                    (
+                        cat $shm.1 | run_test  $rust_bstr &
+                        cat $shm.1 | run_test  rawscan_test &
+                        cat $shm.1 | run_test  rawscan_static_test &
+                        cat $shm.1 | run_test  getline_test &
+                        cat $shm.1 | run_test  fgets_test &
+                        cat $shm.1 | run_test  grep '^abc' &
+                        cat $shm.1 | run_test  sed -n '/^abc/p' &
+                        cat $shm.1 | run_test  $rust_bufreader &
+                        cat $shm.1 | run_test  python2 python2_test &
+                        cat $shm.1 | run_test  python3 python3_test &
+                        cat $shm.1 | run_test  awk '/^abc/' &
+                        wait
+                    ) | cat > /dev/null
+                ) 2>&1 |
+                sort -t, -k7,7n  # sort runs on $nloops for easier viewing
             }
-          ) | cat > /dev/null
-        ) 2>&1
         done
     done
 } ) > compare_various_apis.rawdata.out.$random
