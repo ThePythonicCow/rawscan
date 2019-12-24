@@ -9,6 +9,35 @@ Use the *`rawscan`* library routines `rs_open`(), `rs_getline`(), and
 (any readable open file descriptor).  See doc/HowToUse.md for the
 details of how to use *`rawscan`*.
 
+## Side note -- Project Status
+
+As of December 24, 2019, I am learning NumPy and JupyterLab,
+so I can better analyze and present the performance test results
+comparing this rawscan routine with other various C, sed, awk,
+grep, Python and Rust alternatives.  This may take a few weeks.
+
+Except sometimes (not always!) for BurntSushi's Rust bstr crate
+found at <https://github.com/BurntSushi/bstr>, rawscan is the fastest,
+and plain Python code the slowest, of what I've tested, but
+I'd like to break this down by three cost factors:
+
+   1. Command execution startup costs
+   2. Per-line costs
+   3. Per-character costs
+
+I should now have plenty of data to develop and validate a good
+model of these costs, for each of the alternatives tested.
+
+## Second side note -- Long Running Goals
+
+This rawscan project is seeking multiple goals for me:
+
+  1. Providing a useful text line reader for some useful C/Linux commandline tools I intend to polish up and publish.
+  2. A project to shape my learning (or re-leaning) of such tech as tech as git, cmake, Python, NumPy, and JupyterLab.
+  3. A set of well done C/Linux tools that I can rework in Rust, to learn and contribute to that language.
+
+## Now to return to our regularly scheduled Rawscan Broadcast
+
 *`Rawscan`*'s advantages include:
 
     - fast, safe and robust
@@ -25,7 +54,7 @@ details of how to use *`rawscan`*.
     - .. see "Comparative Analysis" below for details
     - fast ... did I say fast?
 
-# How `rawscan` works internally
+## How `rawscan` works internally
 
 Except as noted in **Special Memory Handling**, below, *`rawscan`*
 uses a single fixed length buffer that is allocated during the
@@ -158,7 +187,7 @@ so long as the entire record still fits in the buffer.)
 
 (to be written - shrinking or expanding the buffer while in use)
 
-# Helper Routines
+## Helper Routines
 
 (to be written - some minor helper routines that support various
 carriage return/newline conventions such as a chomp that works
@@ -166,7 +195,7 @@ well with the returns from rt_getline, and access routines for
 potentially interesting fields or values of the (theoretically)
 opaque RAWSCAN structure.)
 
-# Comparative Analysis:
+## Comparative Analysis:
 
 As part of developing other personal Unix/Linux command line tools
 over the years that process data line by line, I've not been happy
@@ -200,7 +229,7 @@ shift that partially read line lower in the buffer and continue
 reading the rest of it into the buffer, before returning the whole
 line in one piece.
 
-# Comparative Performance
+## Comparative Performance
 
 The following test case highlights *`rawscan`*'s strengths.
 
@@ -258,22 +287,22 @@ no malloc runtime, to sufficiently large buffers to contain the
 entire input, directly accessible in memory (without falling
 apart when an even larger than expected input shows up.)
 
-# Project Origins:
+## Project Origins:
 
 I've been coding various C routines to read input line by line
 for many years, since before stdio even existed.  As an old
 school C programmer, the complexities and inefficiencies of
 the stdio package, compared to raw read(2) and write(2) calls,
-has always annoyed me a bit.
+have always annoyed me a bit.
 
 As a coder of quite a few personal text processing tools, I've long
 experimented with various safe, fast, line readers.  Those familiar
 with Rust's [Result](https://doc.rust-lang.org/std/result/) style of
 handling complex function call returns, or with the above mentioned
-[LineReader](https://crates.io/crates/linereader) routine, will recognize their influence on this current
-rawscan code.
+[LineReader](https://crates.io/crates/linereader) routine, will
+recognize their influence on this current rawscan code.
 
-# How to obtain *`rawscan`*
+## How to obtain *`rawscan`*
 
 Here's how to obtain *`rawscan`* for your project.
 
@@ -300,7 +329,7 @@ Once downloaded or cloned, cd into `rawscan`'s build directory and do:
 One is then ready to use rawscan to help write one's own text
 or line processing utilities.
 
-# Developing and Contributing
+## Developing and Contributing
 
 (to be written - how to develop, test and contribute)
 
