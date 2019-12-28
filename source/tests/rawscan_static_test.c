@@ -39,7 +39,7 @@ func_static void emit(RAWSCAN_RESULT rt)
         // not one byte past that.
         line_len = rt.line.end - rt.line.begin + 1;
 
-        if (fwrite(rt.line.begin, 1, line_len, stdout) < line_len)
+        if (write(1, rt.line.begin, line_len) < line_len)
             error_exit("rawscan write failed");
 }
 
