@@ -64,6 +64,10 @@
 #define __USE_GNU
 #include <string.h>
 
+ /* Need glibc Feature Test Macro __USE_MISC to pick up sbrk(), brk() */
+#define __USE_MISC
+#include <unistd.h>
+
 // cmake debug builds enable asserts (NDEBUG not defined),
 // whereas cmake release builds define NDEBUG to disable asserts.
 #include <assert.h>
@@ -74,13 +78,13 @@
  *
  * The "raw" means that these routines don't use any of the buffered
  * stdio apparatus, but rather directly invoke the read(2) system
- * call.  The "scan" means that these routines handle input only,
- * not output.
+ * call.  The "scan" means that these routines only handle input.
  *
  * rs_getline() reads large chunks into a buffer, and returns
  * portions of that buffer terminated by nul, newline, or whatever
  * other "delimiterbyte" that rawscan stream is configured for.
- * These portions are called "lines" below, though they can
+ *
+ * These chunks are called "lines" below, though they can
  * be any sequence of bytes terminated either by the specified
  * delimiterbyte, or at the very end of the input stream, if that
  * last byte is not that rawscan stream's specified delimiterbyte.
@@ -88,12 +92,14 @@
  * Except as noted in the pause/resume discussion below, whenever
  * rs_getline() finds that it only has a partial line left in the
  * upper end of its buffer, it then tries to move that partial
- * line lower down in its buffer and continue.
+ * line lower down in its buffer and continue reading, hoping to
+ * find a return that line in full (or chunks, if too long for
+ * its buffer.)
  *
  * Thus rs_getline() is not "zero-copy", but "infrequent copy",
  * so long as it's configured in the rs_open() call to have an
- * internal buffer that is usually longer than the typical line it
- * will be returning.
+ * internal buffer that is usually long enough to several lines
+ * at once.
  *
  * This strategy relies on having a fixed upper length to the line
  * length that we need to parse conveniently (in one piece), and
@@ -104,10 +110,10 @@
  * layering suitable mutual exclusion locks over the rawscan streams
  * implemented here, ordinary usage of rawscan on any particular
  * input stream must be single threaded.  If two threads invoked
- * rs_getline() on the same RAWSCAN stream, then one of these
- * calls could cause the buffered data already returned to the
- * other thread to be moved or overwritten, while the other thread
- * was still accessing it.
+ * rs_getline() on the same RAWSCAN stream, then one of these calls
+ * could cause the buffered data already returned to the other
+ * thread to be moved or overwritten, while the other thread was
+ * still accessing it.  That would result in "Undefined Behavior".
  *
  * Multi-thread access to a RAWSCAN stream might be safe under the
  * management of a wrapper that handled the synchronizing locking,
@@ -128,54 +134,73 @@
  * pause/resume states.  First invoke rs_enable_pause() on the
  * RAWSCAN stream.  Then whenever a rs_getline() or similar call
  * would need to invalidate the current contents of the buffer for
- * that stream, that rs_getline() call will instead return with
- * a RAWSCAN_RESULT.type of rt_paused, without invalidating the
- * current buffer contents.  When the calling routine has finished
- * using or copying out whatever data it's still needs from the
- * RAWSCAN buffer, it can then call the rs_resume_from_pause()
- * function on that stream, which will unpause the stream and enable
- * subsequent rs_getline() calls to return more lines.
+ * that stream, that rs_getline() call will instead return with a
+ * RAWSCAN_RESULT.type of rt_paused, without invalidating the current
+ * buffer contents.  When the calling routine has finished using
+ * or copying out whatever data it's still needs from the RAWSCAN
+ * buffer, it can then call the rs_resume_from_pause() function on
+ * that stream, which will unpause the stream and enable the next
+ * subsequent rs_getline() call to return more lines.
  *
  * For applications that can ignore overly long lines, the rawscan
  * interface makes that quick and easy to do so.  Just ignore
  * RAWSCAN_RESULT's with result types of rt_start_longline,
  * rt_within_longline or rt_longline_ended.
  *
- * One key technique that can be used to obtain excellent performance
- * (several times fewer user CPU cycles than stdio buffer based
- * solutions) is the use of routines such as strchr, strchrnul,
+ * One key technique that is often used to obtain excellent
+ * performance is the use of routines such as strchr, strchrnul,
  * memchr, or rawmemchr to scan considerable lengths of input. These
  * routines are very heavily optimized, both by gcc, and further by
  * the Intel(tm) MultiMedia eXtension (MMX) and Intel(tm) Advanced
- * Vector Extensions (AVX) instructions. Whenever a problem can
+ * Vector Extensions (AVX) instructions.  Whenever a problem can
  * be reduced to scanning large spans of buffer looking for a
  * single particular character, these routines can race through
  * the data at maximum speed, operating on data perhaps 128, 256
  * or 512 bits at a time, depending on compiler and CPU technology.
- * This is significantly faster than doing character at a time:
+ *
+ * This is significantly faster than doing such character at a time
+ * looping as:
  *
  *      while ((c = getchar()) != EOF) switch (c) { ... }
- * loops in hand-coded C from a STDIO input buffer, with multiple
- * tests for state and the value of each character 'c' in each
- * loop iteration.
  *
- * The fastest scanner in glibc of strchr, strchrnul, memchr, or
- * rawmemchr is rawmemchr, as it -only- stops scanning when it sees
- * the requested character.  The x86_64 assembly code in glibc for
- * these routines is very fast, at least on "modern" (recent years
- * as of this writing in 2019) Intel and AMD x86_64 processors
- * with AVX vector instructions.  Rawmemchr will happily run to,
- * and beyond, the limits of the memory segment it's searching,
- * causing a SIGSEGV or other such crash, if the character it's
- * looking for is not found sooner.  So the rawscan implementation
- * sets up a read- only page, just past the main buffer, with the
- * configured delimiterbyte in the first byte of that read-only
- * page, ensuring that calls to rawmemchr() will terminate there,
- * if not sooner, regardless of what's in the buffer at the time.
+ * in hand-coded C from a STDIO input buffer, with multiple tests for
+ * state and the value of each character 'c' in each loop iteration.
+ *
+ * The fastest scanner in glibc of strchr, strchrnul, memchr,
+ * or rawmemchr is rawmemchr, as it -only- stops scanning when it
+ * sees the requested character.  The x86_64 assembly code in glibc
+ * for each of these routines is very fast, at least on "modern"
+ * (recent years as of this writing in 2019) Intel and AMD x86_64
+ * processors with AVX vector instructions.  But rawmemchr is
+ * the fastest of these, with the limitation that it will happily
+ * run to, and beyond, the limits of the memory segment it's
+ * searching, potentially causing a SIGSEGV or other such crash,
+ * if the character for which it is looking is not found sooner.
+ * So this rawscan implementation sets up a read- only page, just
+ * past the main buffer, with the configured delimiterbyte in
+ * the first byte of that read-only page, ensuring that calls to
+ * rawmemchr() will terminate there, if not sooner, regardless of
+ * what's in the buffer at the time.
  *
  * The return value from rs_getline() is the RAWSCAN_RESULT
- * structure below.
+ * structure defined in rawscan.h.
  *
+ * Perhaps the biggest downside to this rawscan implementation is
+ * that the code to loop over and handle the returns from rs_getline()
+ * appears at first glance to be quite a bit more complex than the
+ * usual couple of lines it takes to loop over lines of input using
+ * other interfaces.  One has to handle, such as with a switch(),
+ * some eight different return types from rs_getline(), to write
+ * correct and complete code.  However (at least in the probably
+ * biased view of its author) that code is easy to write correctly,
+ * and less prone to some of the coding errors, such as buffer
+ * overruns and off by one errors, that can plague other input
+ * scanners.
+ *
+ * The result should be more robust, and more performant, code
+ * when writing tools that scan input a line (or other such byte
+ * terminated sequence) at a time.
+ * 
  * When returning a line, the RAWSCAN_RESULT.end pointer will
  * point to the newline '\n' character (or whatever delimiterbyte
  * was established in the rs_open() call) that ends the line
@@ -188,19 +213,17 @@
  * Lines (sequences of bytes ending in the delimiterbyte
  * byte) returned by rs_getline() are byte arrays defined by
  * [RAWSCAN_RESULT.begin, RAWSCAN_RESULT.end], inclusive.
- * They reside somewhere in a heap allocated buffer of the size
+ * They reside somewhere in an allocated buffer of the size
  * specified in the rs_open() call.
  *
- * That heap allocated buffer is freed in the rs_close() call,
- * invalidating any previously returned rs_getline() results.  That
- * heap allocated buffer is never moved, once setup in the rs_open()
- * call, until the rs_close() call.  But subsequent rs_getline()
- * calls may invalidate data in that buffer by overwriting or
- * shifting it downward.  So while accessing stale results from an
- * earlier rs_getline() call, after additional calls to rs_getline(),
- * prior to the rs_close() of that stream, won't directly cause an
- * invalid memory access, such accesses might still return invalid
- * data, unless carefully sequenced using the pause/resume facility.
+ * That memory allocated buffer is never moved, once setup in the
+ * rs_open() call.  But subsequent rs_getline() calls may invalidate
+ * data in that buffer by overwriting or shifting it downward.
+ * So while accessing stale results from an earlier rs_getline()
+ * call, after additional calls to rs_getline(), prior to the
+ * rs_close() of that stream, won't directly cause an invalid
+ * memory access, such accesses might still return invalid data,
+ * unless carefully sequenced using the pause/resume facility.
  */
 
 /*
