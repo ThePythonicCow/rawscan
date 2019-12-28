@@ -57,7 +57,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
 #include <stddef.h>
 
 /* Need glibc Feature Test Macro _GNU_SOURCE to pick up rawmemchr() */
@@ -157,12 +156,12 @@
  * single particular character, these routines can race through
  * the data at maximum speed, operating on data perhaps 128, 256
  * or 512 bits at a time, depending on compiler and CPU technology.
- *
+ * 
  * This is significantly faster than doing such character at a time
  * looping as:
  *
  *      while ((c = getchar()) != EOF) switch (c) { ... }
- *
+ * 
  * in hand-coded C from a STDIO input buffer, with multiple tests for
  * state and the value of each character 'c' in each loop iteration.
  *
@@ -261,7 +260,7 @@
 #if profiling_this_code || building_rawscan_dynamic_library
 #define func_static
 #else
-#define func_static static
+#define func_static static inline
 #endif
 
 // We had to define (just above) "func_static" before including
@@ -273,146 +272,162 @@
 
 bool allow_rawscan_force_bufsz_env = false;
 
+// For more efficient testing, especially testing the critically
+// fussy code where a "line" ends within a couple of bytes of the
+// upper bound of page aligned buf, it's quicker to test with a
+// tiny bufsz. Also might want to test larger buf sizes.  Let an
+// environment variable override bufsz.  Only do if global flag
+// "allow_rawscan_force_bufsz_env" is first set true by caller, to
+// better protect against covert Denial of Service (DOS) attack.
+// Caller should not enable "allow_rawscan_force_bufsz_env" in
+// production code.
+
+// We must allocate enough memory to hold:
+//  1) our RAWSCAN *rsp structure,
+//  2) our input buffer, and
+//  3) a read-only sentinel page just above this buffer.
+//
+// The sentinel page will have copy of the delimiterbyte in it
+// first byte, with its permissions changed to read-only.
+//
+// There are various ways we could do this, using the various
+// malloc, memalign, brk, and sbrk calls available to us.
+//
+// We will allocate N+2 pages for this, with the input buffer
+// occupying the upper end of the middle N pages, placed
+// so that its top ends exactly at the top of those N pages,
+// where N == (buffer_pages_size/pgsz).
+//
+// The RAWSCAN *rsp structure will be occupying a small portion of
+// the bottom most page, and the read-only sentinel byte, a copy
+// of the specified delimiterbyte, will be occupying the first byte
+// at the very beginning of the top most page.
+//
+// Our reads into this "bufsz" buffer, and the return of lines
+// by rs_getline() from that buffer, will walk their way up
+// that buffer, until such time as the next line that would be
+// returned does not fit in the remaining buffer.  At that point,
+// if not using the pause/resume logic, and if the partial line
+// we have so far in the buffer does not already entirely fill
+// the buffer, we shift that partial line down to the beginning
+// of the buffer and continue reading the rest of that line into
+// the freed up space higher in the buffer.
+//
+// If the rs_getline() routine finds that it cannot shift a partial
+// line down any further, because that line is longer than fits in
+// the buffer, then rs_getline() begins "too long line" processing,
+// returning the line in partial chunks.  This only happens when
+// an input line is longer than bufsz.
+//
+// The read-only protections on the sentinel page must be on page
+// aligned boundaries.
+
 func_static RAWSCAN *rs_open (
   int fd,              // read input from this file descriptor
   size_t bufsz,        // handle lines at least this many bytes in one chunk
   char delimiterbyte)  // newline '\n' or other char marking end of "lines"
 {
-    RAWSCAN *rsp;        // build new RAWSCAN struct here
-    void *arena;         // allocate new buffers here
-    size_t pgsz;         // hardware memory page size
-    size_t arenasz;      // total number bytes to allocate
-    char *buftop;        // l.u.b. of buf, start of read-only sentinel page
-    char *envbufszstr;   // getenv _RAWSCAN_FORCE_BUFSZ_ override
-    size_t envbufsz;     // _RAWSCAN_FORCE_BUFSZ_ as an integer
+    size_t pgsz;                // runtime hardware memory page size
+    void *old_sbrk;             // initial data break (top of data seg)
+    void *new_sbrk;             // new data break after our allocations
+    void *start_our_pages;      // start of full pages we'll allocate
 
-    // We must allocate enough memory to hold the requested
-    // bufsz buffer, _plus_ a page aligned page immediately
-    // above that buffer, to serve as the sentinel page
-    // with a copy of the delimiterbyte in it first byte,
-    // and with its permissions changed to read-only.
-    //
-    // There are various ways we could do this, using the various
-    // malloc, memalign, and sbrk calls available to us.
-    //
-    // I choose to round up the requested buffer size to the next
-    // multiple of a page size, and then increase that by one more
-    // page for the sentinel page.  This entire allocation we call
-    // the "arena".  The user requested buffer will be in the bottom
-    // N pages of this N+1 page allocation, and will be placed
-    // so that its top ends exactly at the top of those N pages.
-    // One byte past that buffer will be the read-only sentinel
-    // byte with a copy of the specified delimiterbyte.
-    //
-    // Our reads into this "bufsz" buffer, and the return of lines
-    // by rs_getline() from that buffer, will walk their way up
-    // that buffer, until such time as the next line that would be
-    // returned does not fit in the remaining buffer.  At that point,
-    // if not using the pause/resume logic, and if the partial line
-    // we have so far in the buffer does not already entirely fill
-    // the buffer, we shift that partial line down to the beginning
-    // of the buffer and continue reading the rest of that line into
-    // the freed up space higher in the buffer.
-    //
-    // If the rs_getline() routine finds that it cannot shift a
-    // partial line down any further, because that line is longer than
-    // fits in the buffer, then rs_getline() begins "too long line"
-    // processing, returning the line in partial chunks.  This only
-    // happens when an input line is longer than bufsz.
+    RAWSCAN *rsp;               // build new RAWSCAN struct here
 
-    // The read-only protections on the sentinel page must be
-    // on page aligned boundaries.
+    size_t buffer_pages_size;   // number bytes to allocate to buffer pages
+
+    char *buf;                  // input buffer starts here
+    // size_t bufsz   ...       buffer size in bytes, above input parameter
+    char *buftop;               // l.u.b. (top) of buffer
+
+    char *envbufszstr;          // getenv _RAWSCAN_FORCE_BUFSZ_ override
+    size_t envbufsz;            // _RAWSCAN_FORCE_BUFSZ_ as an integer
 
     pgsz = sysconf(_SC_PAGESIZE);
 
-    // For more efficient testing, especially testing the
-    // critically fussy code where a "line" ends within a couple
-    // of bytes of the upper bound of page aligned buf, it's
-    // quicker to test with a tiny bufsz. Also might want to test
-    // larger buf sizes.  Let an environment variable override
-    // bufsz.  Only do if global allow_rawscan_force_bufsz is
-    // first set true by caller, to better protect against covert
-    // DOS attack.  Caller should not allow_rawscan_force_bufsz
-    // in production code.
-
-#ifdef _gigabyte_
-#error _gigabyte_ already defined so can not redefine
-#endif
-#   define _gigabyte_ (1024UL*1024UL*1024UL)
     if ((allow_rawscan_force_bufsz_env == true) &&
         (envbufszstr = getenv("_RAWSCAN_FORCE_BUFSZ_")) != NULL &&
-        (envbufsz = atoi(envbufszstr)) >= 1 && // can't do < 1 byte bufsz's
-        (envbufsz <= (2UL * _gigabyte_))) {    // doesn't do > 2Gb bufsz's
+        (envbufsz = atoi(envbufszstr)) >= 1) {  // can't do < 1 byte bufsz's
             bufsz = envbufsz;
     }
-#   undef _gigabyte_
 
-// Round up x to nearest multiple of y
-#ifdef _Rnd
-#error _Rnd already defined so can not redefine
-#endif
-#   define _Rnd(x,y)    (((((unsigned long)(x))+(y)-1)/(y))*(y))
+// Round up x to next pgsz boundary
+#   define PageSzRnd(x)  (((((unsigned long)(x))+(pgsz)-1)/(pgsz))*(pgsz))
 
-    arenasz = _Rnd(bufsz, pgsz) + pgsz;  // allocate this many bytes to arena
+    buffer_pages_size = PageSzRnd(bufsz);
 
-#   undef _Rnd
+    old_sbrk = sbrk(0);
+    start_our_pages = (void *)PageSzRnd((char *)old_sbrk);
 
-    // Allocate arenasz bytes of memory, on pgsz alignment ...
-    if (posix_memalign(&arena, pgsz, arenasz) != 0) {
+    new_sbrk =
+        (char *)start_our_pages +   // start of next page at or above old_sbrk
+        1*pgsz +                    // one page for RAWSCAN *rsp structure
+        buffer_pages_size +         // size in bytes of pages for input buffer
+        1*pgsz;                     // one page for read-only sentinel page
+
+#   undef PageSzRnd
+
+    if ((brk(new_sbrk)) != 0)
         return NULL;
-    }
 
-    // The top page becomes a read-on sentinel page, with a copy
-    // of the delimiterbyte in its first byte, to ensure that
-    // rawmemchr() scans don't run off allowed memory.
-    buftop = (char *)arena + arenasz - pgsz;
+    rsp = (RAWSCAN *)start_our_pages;
+
+    buftop = (char *)start_our_pages + 1*pgsz + buffer_pages_size;
+    assert(buftop == (char *)new_sbrk - 1*pgsz);
     *buftop = delimiterbyte;
+    buf = buftop - bufsz;
 
     // Protect our sentinel delimiterbyte from stray writes:
-    if (mprotect (buftop, pgsz, PROT_READ) < 0) {
-        free(arena);
+    if (mprotect (buftop, pgsz, PROT_READ) < 0)
         return NULL;
-    }
 
-    if ((rsp = (RAWSCAN *)calloc(1, sizeof(RAWSCAN))) == NULL) {
-        free(arena);
-        return NULL;
-    }
+    memset(rsp, 0, sizeof(*rsp));
 
     rsp->fd = fd;
-    rsp->arena = arena;
     rsp->pgsz = pgsz;
     rsp->bufsz = bufsz;
+    rsp->buf = buf;
     rsp->buftop = buftop;
-    rsp->buf = buftop - bufsz;
     rsp->delimiterbyte = delimiterbyte;
     rsp->p = rsp->q = rsp->buf;
-    rsp->end_this_chunk = NULL;
-    rsp->in_longline = false;
-    rsp->longline_ended = false;
-    rsp->eof_seen = false;
-    rsp->err_seen = false;
-    rsp->errnum = 0;
-    rsp->pause_on_inval = false;
-    rsp->stop_this_pause = false;
+
+    // Above memset() handles following:
+    // rsp->end_this_chunk = NULL;
+    // rsp->in_longline = false;
+    // rsp->longline_ended = false;
+    // rsp->next_val_p = NULL;
+    // rsp->eof_seen = false;
+    // rsp->err_seen = false;
+    // rsp->errnum = 0;
+    // rsp->pause_on_inval = false;
+    // rsp->stop_this_pause = false;
 
     assert (((uintptr_t)(rsp->buftop) % pgsz) == 0);
-    assert (rsp->buf >= (const char *)arena);
+    assert (rsp->buf >= (const char *)buf);
     assert (rsp->buf + rsp->bufsz == rsp->buftop);
+    assert ((char *)rsp + pgsz <= rsp->buf);
+    assert (sizeof(rsp) <= pgsz);
 
     return rsp;
 }
 
-func_static void rs_close(RAWSCAN *rsp)
-{
-    /* We don' t close rsp->fd ... we got it open and we leave it open */
-    (void) mprotect ((char *)(rsp->buftop), rsp->pgsz, PROT_READ|PROT_WRITE);
-    free(rsp->arena);
-    free(rsp);
-}
-
 // Suppress warnings if the pause/resume functions aren't used.
 #define __unused__ __attribute__((unused))
+
+func_static void rs_close(RAWSCAN *rsp __unused__)
+{
+    // We don' t close rsp->fd ... we got it open and we leave it
+    // open.
+    //
+    // We could get fancy and see if the current data break, sbrk(0),
+    // has not moved any further up since we moved it upward in the
+    // above rs_open() call, and if it has not moved up further, move
+    // it back down to the "old_sbrk" we had before the rs_open().
+    //
+    // But I'm not yet sufficiently motivated to do that.
+    //
+    // So this routine is currently a no-op.
+}
 
 __unused__ func_static void rs_enable_pause(RAWSCAN *rsp)
 {
@@ -892,4 +907,5 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
     }
 
     // Not reached: every code path above returns or goes to "slow_loop".
+    assert("internal rawscan library logic error" ? 0 : 0);
 }
