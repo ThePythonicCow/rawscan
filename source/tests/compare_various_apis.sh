@@ -77,7 +77,7 @@ function run_test()
         cmdbasename=$(basename $cmdfullpath)
         cmdwithargs="$*"
 
-        test -f "$cmdfullpath" -a -x "$cmdfullpath" || return
+        test -f "$cmdfullpath" -a -x "$cmdfullpath" || { sleep 1; return; }
 
         # Final CSV fields in each line of test result output:
         #   $cmdbasename,$nlines,$linelen,$nloops,$TIMEFMT
@@ -154,7 +154,7 @@ function run_test()
     # 8 to 4096 bytes, and then repeatedly run our various test
     # cases in a loop (above "run_test()" code).
 
-    for log2linelen in $(seq 3 12)          # line lengths 8 to 4096
+    for log2linelen in $(seq 3 12)        # line lengths 8 to 4096
     do
         for log2nlines in $(seq 3 16)     # number lines 8 to 65536
         do
@@ -163,17 +163,16 @@ function run_test()
             random_line_generator -n $nlines -m $linelen -M $linelen -R > $shm.1
 
             # Feed data into tests using "cat ... |" pipeline,
-            # rather than i/o redirction '<', to keep commands
-            # such as "grep" from cheating and mmap'ing their
-            # input.  Similarly, discard any "stdout" test
-            # output via another "| cat > /dev/null" pipeline,
-            # so that grep can't cheat again by using "splice(2)"
-            # to discard output more quickly if it notices that
-            # its output goes to "/dev/null."  Perhaps more
-            # importantly, since the primary expected use
-            # for rawscan is by text processing commands in
-            # pipelines, it drrmd most relevant to test rawscan
-            # and its various competitors in such pipelines.
+            # rather than i/o redirction '<', to keep commands such
+            # as "grep" from cheating and mmap'ing their input.
+            # Similarly, discard any "stdout" test output via another
+            # "| cat > /dev/null" pipeline, so that grep can't
+            # cheat again by using "splice(2)" to discard output
+            # more quickly if it notices that its output goes to
+            # "/dev/null."  Perhaps more importantly, since the
+            # primary expected use for rawscan is by text processing
+            # commands in pipelines, it seemed most relevant to test
+            # rawscan and its various competitors in such pipelines.
 
             # Feed each test command from a separate dedicated
             # "cat ... |" pipeline, rather than using zsh multios
@@ -181,13 +180,13 @@ function run_test()
             # consumer. Do this so we can get useful, independent,
             # measurements of their total elapsed time.
             #
-            # BEWARE: Elapsed timings from the following won't
-            # mean as much if you don't have enough cores/threads
-            # to run all these in parallel, including the input
-            # and output cat commands.
+            # BEWARE: Elapsed timings from the following won't mean
+            # as much if you don't have enough cores/threads to run
+            # all these in parallel, including the input and output
+            # cat commands and (above) the encompassing zsh commands.
 
-            # Let's reuse the above random input 10 times,
-            # to amortize the cost of generating it.
+            # Let's reuse the above random input 10 times, to
+            # amortize the cost of generating it.
 
             repeat 10 {
                 (
@@ -197,16 +196,16 @@ function run_test()
                         cat $shm.1 | run_test  rawscan_static_test &
                         cat $shm.1 | run_test  getline_test &
                         cat $shm.1 | run_test  fgets_test &
-                        cat $shm.1 | run_test  grep '^abc' &
-                        cat $shm.1 | run_test  sed -n '/^abc/p' &
-                        cat $shm.1 | run_test  $rust_bufreader &
-                        cat $shm.1 | run_test  python2 python2_test &
-                        cat $shm.1 | run_test  python3 python3_test &
-                        cat $shm.1 | run_test  awk '/^abc/' &
+                        # cat $shm.1 | run_test  grep '^abc' &
+                        # cat $shm.1 | run_test  sed -n '/^abc/p' &
+                        # cat $shm.1 | run_test  $rust_bufreader &
+                        # cat $shm.1 | run_test  python2 python2_test &
+                        # cat $shm.1 | run_test  python3 python3_test &
+                        # cat $shm.1 | run_test  awk '/^abc/' &
                         wait
                     ) | cat > /dev/null
                 ) 2>&1 |
-                sort -t, -k7,7n  # sort runs on $nloops for easier viewing
+                sort -t, -k4,4n  # sort runs on $nloops for easier viewing
             }
         done
     done
