@@ -17,9 +17,9 @@ comparing this rawscan routine with other various C, sed, awk,
 grep, Python and Rust alternatives.  This may take a few weeks.
 
 Except sometimes (not always!) for BurntSushi's Rust bstr crate
-found at <https://github.com/BurntSushi/bstr>, rawscan is the fastest,
-and plain Python code the slowest, of what I've tested, but
-I'd like to break this down by three cost factors:
+found at [BurntSushi's bstr](https://github.com/BurntSushi/bstr),
+rawscan is the fastest, and plain Python code the slowest, of what
+I've tested, but I'd like to break this down by three cost factors:
 
    1. Command execution startup costs
    2. Per-line costs
@@ -132,7 +132,7 @@ delimiterbyte in the first byte of that read-only page, ensuring
 that calls to `rawmemchr` will terminate there, if not sooner,
 regardless of what's in the buffer at the time.
 
-# Advanced features
+## Advanced features
 
 The following pause/resume, memory, multiline, and delimiterbyte
 facilities extend the default behavior described above.  If you
@@ -145,22 +145,30 @@ The *`rawscan`* calling routine can gain some control over when the
 contents of the buffer are invalidated by using the optional
 **pause/resume** states.
 
-To use **pause/resume**, first invoke `rs_enable_pause`()
-on the RAWSCAN stream.  That call just sets a flag on the
+To use **pause/resume**, first invoke `rs_enable_pause`() on the
+RAWSCAN stream.  That call just sets a *pause enable flag* on the
 stream's internal state and returns immediately.
 
-Then whenever a `rs_getline`() call hits the upper end of
-the buffer and needs to invalidate the already returned portion to
-make room for more data, that `rs_getline`() call will instead
-return with a `RAWSCAN_RESULT.type` of `rt_paused`, without altering
-the current buffer contents.
+Then whenever a `rs_getline`() call hits the upper end of the buffer
+and needs to invalidate the already returned portion to make room
+for more data, that `rs_getline`() call will instead return with a
+`RAWSCAN_RESULT.type` of `rt_paused`, without altering the current
+buffer contents.
 
 When the calling routine has finished using or copying out
-whatever data it's still needs from the buffer, it can then call
-the `rs_resume_from_pause`() function on that stream, which
-will unpause the stream and enable subsequent `rs_getline`()
-calls to once again return more lines, and overwrite some of the
-mpreviously returned data that had been in the buffer.
+whatever data it's still needs from the buffer, it can then call the
+`rs_resume_from_pause`() function on that stream, which will unpause
+the stream and enable subsequent `rs_getline`() calls to once again
+return more lines, and overwrite some of the previously returned
+data that had been in the buffer.
+
+Such calls to the `rs_resume_from_pause`() function do not alter
+the setting of the *pause enable flag* set by `rs_enable_pause`().
+Rather such calls to the `rs_resume_from_pause`() function just set
+a one-time latch, enabling the next `rs_getline`() call to one-time
+overwrite stale data in the buffer in order to make room to read
+in more data that it can scan and potentially return to the caller.
+Use the `rs_disable_pause`() call to disable the *pause enable flag*.
 
 ### Accessing state of a paused stream
 
@@ -195,19 +203,20 @@ well with the returns from rt_getline, and access routines for
 potentially interesting fields or values of the (theoretically)
 opaque RAWSCAN structure.)
 
-## Comparative Analysis:
+## Comparative Analysis
 
 As part of developing other personal Unix/Linux command line tools
 over the years that process data line by line, I've not been happy
 with the existing alternatives for scanning input lines:
 
- - stdio's [gets](https://www.studymite.com/blog/strings-in-c#read_using_gets)() is dangerously insecure, allowing buffer overflow.
- - stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)(), [scanf](http://c-faq.com/stdio/scanfprobs.html)() and [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() use slow double buffering.
- - stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)() cannot correctly handle lines with embedded nuls.
- - [scanf](http://c-faq.com/stdio/scanfprobs.html)() risks failed format matching and buffer overflows
- - [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() loops are accurate, but with slower per byte logic
- - [getline](https://www.studymite.com/blog/strings-in-c#read_using_getline)() grows (realloc's) its buffer to handle longer lines
- - [getdelim](https://www.studymite.com/blog/strings-in-c#read_using_getdelim)() is just like getline(), with a configurable delimiter
+- stdio's [gets](https://www.studymite.com/blog/strings-in-c#read_using_gets)() is dangerously insecure, allowing buffer overflow.
+- stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)(), [scanf](http://c-faq.com/stdio/scanfprobs.html)() and [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() use slow double buffering.
+- stdio's [fgets](https://www.studymite.com/blog/strings-in-c#read_using_fgets)() cannot correctly handle lines with embedded nuls.
+- stdio's fgets() normal usage confuses continuations of lines longer than buffer with start of new lines.
+- [scanf](http://c-faq.com/stdio/scanfprobs.html)() risks failed format matching and buffer overflows
+- [getchar](https://www.studymite.com/blog/strings-in-c#read_using_getchar)() loops are accurate, but with slower per byte logic
+- [getline](https://www.studymite.com/blog/strings-in-c#read_using_getline)() grows (realloc's) its buffer to handle longer lines
+- [getdelim](https://www.studymite.com/blog/strings-in-c#read_using_getdelim)() is just like getline(), with a configurable delimiter
 
 The buffer growing reallocations in `getline`() present the risk
 of a denial of service attack.  Applications using `getline`()
@@ -287,7 +296,7 @@ no malloc runtime, to sufficiently large buffers to contain the
 entire input, directly accessible in memory (without falling
 apart when an even larger than expected input shows up.)
 
-## Project Origins:
+## Project Origins
 
 I've been coding various C routines to read input line by line
 for many years, since before stdio even existed.  As an old
@@ -306,7 +315,7 @@ recognize their influence on this current rawscan code.
 
 Here's how to obtain *`rawscan`* for your project.
 
-### Prerequisites and portability:
+### Prerequisites and portability
 
 *`Rawscan`* is developed and maintained using the GNU C compiler
 on Linux systems, though a `cmake` build system is provided that
