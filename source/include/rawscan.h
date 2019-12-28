@@ -26,7 +26,6 @@
 
 typedef struct {
     int fd;                // open file descriptor to be read
-    void *arena;           // memory allocated arena
     size_t pgsz;           // hardware memory page size
     size_t bufsz;          // handle lines up to this long
     const char *buf;       // bufsz buffer
