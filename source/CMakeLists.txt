@@ -50,13 +50,12 @@ target_compile_features(rawscan PUBLIC c_std_11)
 
 target_compile_options(rawscan PRIVATE
     $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
-        -pipe -march=native
-        $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>>
-        $<$<CONFIG:Release>:-O3>
+            -pipe -march=native
+            $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>
+            $<$<CONFIG:Release>:-O3>>
 
     $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
 )
-
 add_subdirectory(tests)
 
 include(GNUInstallDirs)
