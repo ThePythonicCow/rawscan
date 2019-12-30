@@ -22,3 +22,14 @@ configure_file(summarize_results.sh summarize_results COPYONLY)
 configure_file(regression_stress_test.sh regression_stress_test COPYONLY)
 configure_file(python2_test python2_test COPYONLY)
 configure_file(python3_test python3_test COPYONLY)
+
+foreach(executable rawscan_test rawscan_static_test fgets_test random_line_generator)
+    target_compile_options(${executable} PRIVATE
+        $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
+                -pipe
+                $<$<CONFIG:Debug>:-O0 -march=native -Wall -Wextra -Wpedantic>
+                $<$<CONFIG:Release>:-O3 -march=native>>
+
+        $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
+    )
+endforeach()
