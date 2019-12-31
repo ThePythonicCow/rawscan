@@ -26,9 +26,9 @@ configure_file(python3_test python3_test COPYONLY)
 foreach(executable rawscan_test rawscan_static_test fgets_test random_line_generator)
     target_compile_options(${executable} PRIVATE
         $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:
-                -pipe
-                $<$<CONFIG:Debug>:-O0 -march=native -Wall -Wextra -Wpedantic>
-                $<$<CONFIG:Release>:-O3 -march=native>>
+                -pipe -march=native
+                $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>
+                $<$<CONFIG:Release>:-O3>>
 
         $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
     )

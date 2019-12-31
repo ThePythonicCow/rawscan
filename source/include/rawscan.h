@@ -49,7 +49,7 @@ typedef struct {
     bool err_seen;         // read err seen - can no longer read into buffer
     int errnum;            // errno of last read if failed
     bool pause_on_inval;   // pause when need to invalidate buffer
-    bool stop_this_pause;  // resume from current pause
+    bool terminate_current_pause;  // resume from current pause
 } RAWSCAN;
 
 // Enumerate the various kinds of RAWSCAN_RESULT's that rs_getline returns.

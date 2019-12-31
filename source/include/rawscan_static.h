@@ -88,7 +88,7 @@
  * delimiterbyte, or at the very end of the input stream, if that
  * last byte is not that rawscan stream's specified delimiterbyte.
  *
- * Except as noted in the pause/resume discussion below, whenever
+ * Except as noted in the pause discussion below, whenever
  * rs_getline() finds that it only has a partial line left in the
  * upper end of its buffer, it then tries to move that partial
  * line lower down in its buffer and continue reading, hoping to
@@ -105,7 +105,7 @@
  * being willing to accept returns of any lines longer than that
  * length in multiple chunks, rather than as a single string.
  *
- * Unless (1) using the optional pause/resume states and (2)
+ * Unless (1) using the optional pause states and (2)
  * layering suitable mutual exclusion locks over the rawscan streams
  * implemented here, ordinary usage of rawscan on any particular
  * input stream must be single threaded.  If two threads invoked
@@ -119,7 +119,7 @@
  * and that copied out data being returned on a rs_getline() call
  * to the invoking thread's private data area, before returning.
  * A sufficiently sophisticated such wrapper manager could use the
- * pause/resume facility in order to allow parallel read-only access
+ * pause facility in order to allow parallel read-only access
  * to the buffer, while locking and single threading rs_getline()
  * calls that update the thread, and joining or blocking all
  * other threads from read-only access during a rs_getline()
@@ -130,7 +130,7 @@
  *
  * The rawscan calling routine can gain some control over when the
  * contents of the buffer are invalidated by using the optional
- * pause/resume states.  First invoke rs_enable_pause() on the
+ * pause states.  First invoke rs_enable_pause() on the
  * RAWSCAN stream.  Then whenever a rs_getline() or similar call
  * would need to invalidate the current contents of the buffer for
  * that stream, that rs_getline() call will instead return with a
@@ -222,7 +222,7 @@
  * call, after additional calls to rs_getline(), prior to the
  * rs_close() of that stream, won't directly cause an invalid
  * memory access, such accesses might still return invalid data,
- * unless carefully sequenced using the pause/resume facility.
+ * unless carefully sequenced using the pause facility.
  */
 
 /*
@@ -307,7 +307,7 @@ bool allow_rawscan_force_bufsz_env = false;
 // by rs_getline() from that buffer, will walk their way up
 // that buffer, until such time as the next line that would be
 // returned does not fit in the remaining buffer.  At that point,
-// if not using the pause/resume logic, and if the partial line
+// if not using the pause logic, and if the partial line
 // we have so far in the buffer does not already entirely fill
 // the buffer, we shift that partial line down to the beginning
 // of the buffer and continue reading the rest of that line into
@@ -400,7 +400,7 @@ func_static RAWSCAN *rs_open (
     // rsp->err_seen = false;
     // rsp->errnum = 0;
     // rsp->pause_on_inval = false;
-    // rsp->stop_this_pause = false;
+    // rsp->terminate_current_pause = false;
 
     assert (((uintptr_t)(rsp->buftop) % pgsz) == 0);
     assert (rsp->buf >= (const char *)buf);
@@ -411,7 +411,7 @@ func_static RAWSCAN *rs_open (
     return rsp;
 }
 
-// Suppress warnings if the pause/resume functions aren't used.
+// Suppress warnings if the pause functions aren't used.
 #define __unused__ __attribute__((unused))
 
 func_static void rs_close(RAWSCAN *rsp __unused__)
@@ -437,12 +437,12 @@ __unused__ func_static void rs_enable_pause(RAWSCAN *rsp)
 __unused__ func_static void rs_disable_pause(RAWSCAN *rsp)
 {
     rsp->pause_on_inval = false;
-    rsp->stop_this_pause = false;
+    rsp->terminate_current_pause = false;
 }
 
 __unused__ func_static void rs_resume_from_pause(RAWSCAN *rsp)
 {
-    rsp->stop_this_pause = true;
+    rsp->terminate_current_pause = true;
 }
 
 /*
@@ -494,23 +494,22 @@ __unused__ func_static void rs_resume_from_pause(RAWSCAN *rsp)
  * called one more time on such a stream, then the type field for
  * that result will finally be set to "rt_eof".
  *
- * Regarding the "reset pause/resume logic" noted in a few comments
- * below, here's the sequence of events that result in this reset:
+ * Regarding the "reset pause logic" noted in two comments below,
+ * here's the sequence of events that result in this reset:
  *
  *  1) rawscan pauses incoming processing, to not overwrite
  *      already returned data the caller might still be using
  *  2) caller copies out or finishes using any such data
  *  3) caller invokes the rs_resume_from_pause() call
  *      to tell rawscan it's done with any such buffered data
- *  4) rs_resume_from_pause() sets "rsp->stop_this_pause = true;"
+ *  4) rs_resume_from_pause() sets "rsp->terminate_current_pause = true;"
  *      telling rawscan that it is safe to overwrite buffered
  *      data in order to reuse buffer space
- *  5) "rsp->stop_this_pause" is left set to "true" for a while,
+ *  5) "rsp->terminate_current_pause" is left set to "true" for a while,
  *      preventing more pauses
- *  6) only when rt_getline() is about to return more data
- *      (either as a full line or a chunk of a long line)
- *      will it set "rsp->stop_this_pause = false;", once again
- *      enabling a pause to happen, the next time that rawscan
+ *  6) when rs_getline() resets or overwrites some of its buffer, then
+ *      it will set "rsp->terminate_current_pause = false", once again
+ *      enabling more future pauses to happen, the next time that rawscan
  *      has to overwrite more of what it's already returned.
  */
 
@@ -543,7 +542,6 @@ static RAWSCAN_RESULT rawscan_full_line(RAWSCAN *rsp)
     rt.line.end = rsp->end_this_chunk;
 
     rsp->p = rsp->next_val_p;
-    rsp->stop_this_pause = false;        // reset pause/resume logic
 
     return rt;
 }
@@ -614,8 +612,6 @@ static RAWSCAN_RESULT rawscan_start_of_longline(RAWSCAN *rsp)
     rsp->end_this_chunk = NULL;     // force rs_getline to set again
     rsp->next_val_p = NULL;         // force rs_getline to set again
 
-    rsp->stop_this_pause = false;        // reset pause/resume logic
-
     return rt;
 }
 
@@ -639,8 +635,6 @@ static RAWSCAN_RESULT rawscan_within_longline(RAWSCAN *rsp)
 
     rsp->end_this_chunk = NULL;     // force rs_getline to set again
     rsp->next_val_p = NULL;         // force rs_getline to set again
-
-    rsp->stop_this_pause = false;        // reset pause/resume logic
 
     return rt;
 }
@@ -789,14 +783,12 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
 
     if (rsp->p < rsp->q) {
         if (next_delim_ptr < rsp->q) {
-            // return full line
             RAWSCAN_RESULT rt;
 
             rt.type = rt_full_line;
             rt.line.begin = rsp->p;
             rt.line.end = next_delim_ptr;
             rsp->p = next_delim_ptr + 1;
-            rsp->stop_this_pause = false;        // reset pause/resume logic
             return rt;
         } else if (rsp->q < rsp->buftop) {
             // have space above q: read more and try again
@@ -883,11 +875,12 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
         goto slow_loop;
     } else if (pstat->have_bytes_in_p_q) {
         if (pstat->have_space_below_p) {
-            if (rsp->pause_on_inval && !rsp->stop_this_pause) {
+            if (rsp->pause_on_inval && !rsp->terminate_current_pause) {
                 return rawscan_paused();
             } else {
                 rawscan_shift_buffer_contents_down(rsp);
                 start_next_rawmemchr_here = rsp->q;
+                rsp->terminate_current_pause = false;    // reset pause logic
                 goto slow_loop;
             }
         } else {
@@ -897,11 +890,12 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
         // We have more input, but no where to put it.  Our buffer
         // is stuffed with lines we've already returned to our caller.
         // Time to reset buffers, or pause awaiting a resume.
-        if (rsp->pause_on_inval && !rsp->stop_this_pause) {
+        if (rsp->pause_on_inval && !rsp->terminate_current_pause) {
             return rawscan_paused();
         } else {
             rsp->p = rsp->q = rsp->buf;    // reset buffers
             start_next_rawmemchr_here = rsp->q;
+            rsp->terminate_current_pause = false;    // reset pause logic
             goto slow_loop;
         }
     }
