@@ -1,5 +1,5 @@
 #include <rawscan_static.h>
-
+// TODO ... pull out common test and static_test code ...
 /*
  * < input rawscan_static_test [-b bufsz] > output
  *
@@ -48,9 +48,13 @@ func_static void rawscan_test(int fd, size_t bufsz)
     RAWSCAN *rsp;
     RAWSCAN_RESULT rt;
     bool good_long_line = false;
+    const char *abc_pattern = "abc";
+    const int abc_len = strlen(abc_pattern);
 
     if ((rsp = rs_open(fd, bufsz, '\n')) == NULL)
         error_exit("rawscan rs_open memory allocation failure");
+
+    rs_set_min1stchunklen(rsp, abc_len);
 
     for (;;) {
 
@@ -58,23 +62,14 @@ func_static void rawscan_test(int fd, size_t bufsz)
 
         switch (rt.type) {
             case rt_full_line:
-            case rt_full_line_without_eol: {
-                const char *p = rt.line.begin;
-                const char *q = "abc";
-                while (*q) {
-                    if (*p++ != *q++)
-                        goto nomatch;
-                }
-                emit(rt);
-        nomatch:
+            case rt_full_line_without_eol:
+                if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+                    emit(rt);
                 break;
-            }
-
             case rt_start_longline:
-                good_long_line = (strncmp(rt.line.begin, "abc", 3) == 0);
-                if (good_long_line)
-                        emit(rt);
-                break;
+                if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+                   good_long_line = true;
+                // fall through ...
             case rt_within_longline:
                 if (good_long_line)
                         emit(rt);
@@ -84,10 +79,6 @@ func_static void rawscan_test(int fd, size_t bufsz)
                 break;
             case rt_paused:
                 break;
-
-            // rs_close() frees the buffer and RAWSCAN structure that were
-            // allocated in rs_open() above.  It doesn't close the passed
-            // in "fd" file descriptor.  The caller is responsible for "fd".
             case rt_eof:
                 rs_close(rsp);
                 return;
@@ -101,7 +92,7 @@ func_static void rawscan_test(int fd, size_t bufsz)
     }
 }
 
-#define default_buffer_size (16*4096)
+#define default_buffer_size (16*1024)
 
 int main (int argc, char **argv)
 {

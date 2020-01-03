@@ -270,18 +270,6 @@
 
 #include <rawscan.h>
 
-bool allow_rawscan_force_bufsz_env = false;
-
-// For more efficient testing, especially testing the critically
-// fussy code where a "line" ends within a couple of bytes of the
-// upper bound of page aligned buf, it's quicker to test with a
-// tiny bufsz. Also might want to test larger buf sizes.  Let an
-// environment variable override bufsz.  Only do if global flag
-// "allow_rawscan_force_bufsz_env" is first set true by caller, to
-// better protect against covert Denial of Service (DOS) attack.
-// Caller should not enable "allow_rawscan_force_bufsz_env" in
-// production code.
-
 // We must allocate enough memory to hold:
 //  1) our RAWSCAN *rsp structure,
 //  2) our input buffer, and
@@ -340,16 +328,7 @@ func_static RAWSCAN *rs_open (
     // size_t bufsz   ...       buffer size in bytes, above input parameter
     char *buftop;               // l.u.b. (top) of buffer
 
-    char *envbufszstr;          // getenv _RAWSCAN_FORCE_BUFSZ_ override
-    size_t envbufsz;            // _RAWSCAN_FORCE_BUFSZ_ as an integer
-
     pgsz = sysconf(_SC_PAGESIZE);
-
-    if ((allow_rawscan_force_bufsz_env == true) &&
-        (envbufszstr = getenv("_RAWSCAN_FORCE_BUFSZ_")) != NULL &&
-        (envbufsz = atoi(envbufszstr)) >= 1) {  // can't do < 1 byte bufsz's
-            bufsz = envbufsz;
-    }
 
 // Round up x to next pgsz boundary
 #   define PageSzRnd(x)  (((((unsigned long)(x))+(pgsz)-1)/(pgsz))*(pgsz))
@@ -388,6 +367,7 @@ func_static RAWSCAN *rs_open (
     rsp->bufsz = bufsz;
     rsp->buf = buf;
     rsp->buftop = buftop;
+    rsp->min1stchunklen = bufsz;
     rsp->delimiterbyte = delimiterbyte;
     rsp->p = rsp->q = rsp->buf;
 
@@ -689,11 +669,8 @@ static void rawscan_shift_buffer_contents_down(RAWSCAN *rsp)
     const char *new_q = rsp->q - howfartoshift;
 
     assert (howmuchtoshift > 0);
-
-    // only call rawscan_shift_buffer_contents_down if buf
-    // no longer has any free space at its top
+    assert (howmuchtoshift < rsp->min1stchunklen);
     assert(rsp->q == rsp->buftop);
-
     assert(new_q == rsp->buf + howmuchtoshift);
 
     memmove((void *)new_p, old_p, howmuchtoshift);
@@ -798,6 +775,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
                 start_next_rawmemchr_here = next_q;
                 goto fast_loop;
             } // else fall into the slow loop ...
+        // TODO else if have min1stchunklen, then return first partial ...
         } // else fall into the slow loop ...
     } // else fall into the slow loop ...
 
@@ -835,7 +813,7 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
     //          "Rawscanner - the heart of your input."
     //          "Refill your coffee cup before reading this."
 
-    if (pstat->found_a_delimiterbyte) {
+    if (pstat->found_a_delimiterbyte) {  // TODO ... if delimptr < q
         assert(next_delim_ptr < rsp->q);
         rsp->end_this_chunk = next_delim_ptr;
         rsp->next_val_p = next_delim_ptr + 1;
@@ -843,8 +821,8 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
             return rawscan_handle_end_of_longline(rsp);
         } else {
             return rawscan_full_line(rsp);
-        }
-    } else if (pstat->end_of_input_seen) {
+        }                               // TODO ... no neeed "else", just "if"
+    } else if (pstat->end_of_input_seen) {  // TODO ... if eof or err 
         if (pstat->have_more_chars_in_buf) {
             assert (pstat->have_space_above_q);
             // We know that we "have_space_above_q" because we've seen
@@ -865,14 +843,17 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
             return rawscan_eof(rsp);
         } else {
             return rawscan_err(rsp);
-        }
-    } else if (pstat->have_space_above_q) {
+        }                               // TODO ... no neeed "else", just "if"
+    } else if (pstat->have_space_above_q) { // TODO ... if q < top
         const char *next_q;
 
         if ((next_q = rawscan_read(rsp)) != NULL) {
             start_next_rawmemchr_here = next_q;
         }
-        goto slow_loop;
+        goto slow_loop;                               // TODO ... no neeed "else", just "if"
+    } else if ((size_t)(rsp->q - rsp->p) >= rsp->min1stchunklen) {
+        // prefer chunking to copying if len >= min1stchunklen
+        return rawscan_handle_part_of_longline(rsp, rsp->q);
     } else if (pstat->have_bytes_in_p_q) {
         if (pstat->have_space_below_p) {
             if (rsp->pause_on_inval && !rsp->terminate_current_pause) {
@@ -902,4 +883,108 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
 
     // Not reached: every code path above returns or goes to "slow_loop".
     assert("internal rawscan library logic error" ? 0 : 0);
+}
+
+/*
+ * "min1stchunklen" is the guaranteed minimum length of the first
+ * chunk of a long line, or minimum length of a full line, that
+ * rs_getline() will return.
+ * 
+ * By default, in rs_open(), min1stchunklen is set to be the same
+ * value as the caller specified bufsz.  This means that rs_getline()
+ * will "move heaven and earth" (well, move an almost entirely
+ * full buffer of a partial line that initially extended past the
+ * upper end of the buffer) in an effort to get the entire line
+ * into a single buffer and return it as a full line, rather than
+ * as multiple chunks.
+ * 
+ * However it is often the case that programs don't need to see an
+ * entire line in a single piece in order to decide whether or not
+ * that line is worth further consideration.
+ *
+ * If a program knows that it can easily distinguish which lines
+ * it is most interested in by examining, say, just the first 42
+ * bytes of the line, then that program can change "min1stchunklen"
+ * from the default size of the entire buffer, down to just 42.
+ *
+ * Then the rs_getline() code will not waste CPU, cache and memory
+ * cycles copying a longer (than 42) but still incomplete line
+ * prefix from the upper end of the buffer to the bottom of the
+ * buffer, trying to get the entire line in a single full line,
+ * without chunking.  Rather rs_getline() can just return the 42+
+ * byte chunk it has in the top of its buffer, for the caller to
+ * quicky evaluate for further relevancy.
+ * 
+ * Moreover, if some smaller prefix, less than our example 42
+ * bytes, is found in the upper end of the buffer, rs_getline
+ * need only copy that smaller prefix 
+ *
+ * All this enables an application using rawscan to allocate a
+ * large input buffer, say 64 kbytes or 128 kbytes, for performance
+ * without risking losing that performance when a substantial portion
+ * of the leading part of a very long, say 50 kbyte, 100 kbyte or
+ * even longer line ends up in the upper end of the buffer, when
+ * by default, rs_getline() would copy that substantial portion to
+ * the low end of the buffer, only to have the caller decide after
+ * looking at, say, the first 42 bytes of the line that it had no
+ * interest in the rest of that line.
+ *
+ * In other words, the default to always return full lines, not
+ * chunked into multiple pieces, for all lines that can be made to
+ * fit in the buffer, can be inefficient, especially if both of:
+ * 
+ *  1) Using a large buffer primarily for performance (minimizing
+ *     read() system calls) rather than for the guarantee that any
+ *     line shorter than the full buffer size will always be returned
+ *     as a single line, rather than multiple chunks, even if that
+ *     means that rs_getline() internals had to copy part of a long
+ *     line from the upper end of the buffer down to the lower end.
+ *  2) Long lines that fill a significant fraction of this large
+ *     buffer are seen frequently (or at least they are not rare.)
+ * 
+ * If the caller prefers a large input buffer for performance,
+ * but would rather not pay the price of internal rs_getline()
+ * copying partial lines that hit the top of the buffer, then the
+ * caller can choose to minimize such internal copies, and instead
+ * receive such lines potentially in multiple chunks, for any line
+ * of length (including trailing delimiter) at or above the length
+ * specified in the most recent rs_set_min1stchunklen() call.
+ *
+ * In short, rs_set_min1stchunklen(rsp, min1stchunklen) tells the
+ * RAWSCAN input stream "rsp" to return at least "min1stchunklen"
+ * bytes from longer input lines in single chunks (whether as full
+ * and complete lines, or as the initial chunk of a longer line),
+ * but perhaps more importantly, this call also tells that RAWSCAN
+ * stream _not_ to waste cycles moving stuff around in its buffer
+ * trying to get more of a line for its first return for that line.
+ *
+ * The min1stchunklen passed into a rs_set_min1stchunklen() call
+ * must be less than or equal to (the default value of) RAWSCAN
+ * stream's buffer size (as specified in the rs_open() call) for
+ * that buffer.  rs_set_min1stchunklen() will fail, returning -1
+ * and doing nothing else, if the requested min1stchunklen value is
+ * greater than the size of that RAWSCAN stream's buffer.  Otherwise,
+ * rs_set_min1stchunklen() will successfully change that stream's
+ * min1stchunklen value and return 0.
+ *
+ * Potential Future Extension: I can imagine adding another rs_*()
+ * routine that will, on a one time basis, have the rawscan code
+ * shift a partial line (or even multiple consecutive lines) lower
+ * in the buffer, in order to fit more of that line (or of a several
+ * line sequence) into the buffer, for more convenient parsing
+ * from a single consecutive byte sequence.
+ */
+
+func_static int rs_set_min1stchunklen(RAWSCAN *rsp, size_t min1stchunklen)
+{
+    if (min1stchunklen > rsp->bufsz)
+        return -1;
+
+    rsp->min1stchunklen = min1stchunklen;
+    return 0;
+}
+
+func_static size_t rs_get_min1stchunklen(RAWSCAN *rsp)
+{
+    return rsp->min1stchunklen;
 }

@@ -28,9 +28,9 @@ typedef struct {
     int fd;                // open file descriptor to be read
     size_t pgsz;           // hardware memory page size
     size_t bufsz;          // handle lines up to this long
+    size_t min1stchunklen; // guaranteed min len of first chunk of long line
     const char *buf;       // bufsz buffer
     const char *buftop;    // l.u.b. of buf; put read-only delimiterbyte here
-    char delimiterbyte;    // byte @ end of "lines" (e.g. '\n' or '\0')
     const char *p, *q;     // [begin, end) of not yet returned chars in buf
 
     // When rs_getline() calls a subroutine to return the next
@@ -43,11 +43,12 @@ typedef struct {
     const char *end_this_chunk;  // ptr to last byte in this line/chunk
     const char *next_val_p;      // start next chunk/line (or rsp->q if none)
 
+    int errnum;            // errno of last read if failed
+    char delimiterbyte;    // byte @ end of "lines" (e.g. '\n' or '\0')
     bool in_longline;      // seen begin of too long line, but not yet end
     bool longline_ended;   // end of long line seen
     bool eof_seen;         // eof seen - can no longer read into buffer
     bool err_seen;         // read err seen - can no longer read into buffer
-    int errnum;            // errno of last read if failed
     bool pause_on_inval;   // pause when need to invalidate buffer
     bool terminate_current_pause;  // resume from current pause
 } RAWSCAN;
@@ -89,7 +90,7 @@ typedef struct {
 
 func_static RAWSCAN *rs_open (
   int fd,              // read input from this (already open) file descriptor
-  size_t bufsz,        // handle lines at least this many bytes in one chunk
+  size_t bufsz,        // main input buffer size
   char delimiterbyte   // newline '\n' or other byte marking end of "lines"
 );
 
@@ -98,14 +99,7 @@ func_static void rs_enable_pause(RAWSCAN *rsp);
 func_static void rs_disable_pause(RAWSCAN *rsp);
 func_static void rs_resume_from_pause(RAWSCAN *rsp);
 func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp);
-
-// By default, don't allow bufsz env override. Only commands that
-// set allow_rawscan_force_bufsz_env to true at runtime allow it.
-// If allowed, then rawscan library code overrides rs_open()
-// bufsz specified by calling application with whatever value is
-// set in the environment variable _RAWSCAN_FORCE_BUFSZ_ (if that
-// variable is set to a positive integer value.)
-
-extern bool allow_rawscan_force_bufsz_env;
+func_static int rs_set_min1stchunklen(RAWSCAN *rsp, size_t min1stchunklen);
+func_static size_t rs_get_min1stchunklen(RAWSCAN *rsp);
 
 #endif /* _RAWSCAN_H */
