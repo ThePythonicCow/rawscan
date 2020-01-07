@@ -20,38 +20,7 @@
 
 #include <stdbool.h>
 
-/*
- * The internal state of a rawscan stream:
- */
-
-typedef struct {
-    int fd;                // open file descriptor to be read
-    size_t pgsz;           // hardware memory page size
-    size_t bufsz;          // handle lines up to this long
-    size_t min1stchunklen; // guaranteed min len of first chunk of long line
-    const char *buf;       // bufsz buffer
-    const char *buftop;    // l.u.b. of buf; put read-only delimiterbyte here
-    const char *p, *q;     // [begin, end) of not yet returned chars in buf
-
-    // When rs_getline() calls a subroutine to return the next
-    // line or chunk (part of a line too long to fit in buffer)
-    // then it must tell the subroutine:
-    //  1) ptr to first byte in chunk/line: rsp->p
-    //  2) ptr to last byte in chunk/line: rsp->end_this_chunk
-    //  3) new value of rsp->p: next byte in buf, else rsp->q if none
-
-    const char *end_this_chunk;  // ptr to last byte in this line/chunk
-    const char *next_val_p;      // start next chunk/line (or rsp->q if none)
-
-    int errnum;            // errno of last read if failed
-    char delimiterbyte;    // byte @ end of "lines" (e.g. '\n' or '\0')
-    bool in_longline;      // seen begin of too long line, but not yet end
-    bool longline_ended;   // end of long line seen
-    bool eof_seen;         // eof seen - can no longer read into buffer
-    bool err_seen;         // read err seen - can no longer read into buffer
-    bool pause_on_inval;   // pause when need to invalidate buffer
-    bool terminate_current_pause;  // resume from current pause
-} RAWSCAN;
+typedef struct RAWSCAN RAWSCAN; // support opaque pointers to RAWSCAN structs
 
 // Enumerate the various kinds of RAWSCAN_RESULT's that rs_getline returns.
 
