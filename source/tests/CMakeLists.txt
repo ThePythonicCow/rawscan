@@ -29,7 +29,11 @@ foreach(executable rawscan_test rawscan_static_test fgets_test random_line_gener
                 -pipe -march=native
                 $<$<CONFIG:Debug>:-O0 -Wall -Wextra -Wpedantic>
                 $<$<CONFIG:Release>:-O3>>
-
-        $<$<C_COMPILER_ID:MSVC>:$<$<CONFIG:Debug>:/Od /Wall /Zi>>
+##  gcov options:
+##              $<$<CONFIG:Release>:-Og --coverage>>
     )
+
+##    target_link_options(${executable} PRIVATE
+##        $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:GNU>>:--coverage>
+##    )
 endforeach()
