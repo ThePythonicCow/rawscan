@@ -243,7 +243,9 @@ func_static size_t get_random_less_than(pcg32_random_t *rng, size_t top)
 #define B64MAPLEN 64
 func_static byte b64map[B64MAPLEN];  // Base 64 Alphabet (from RFC 3548)
 
-func_static void build_b64map(byte *map, int len)
+#define __unused__ __attribute__((unused))
+
+func_static void build_b64map(byte *map, int len __unused__)
 {
     int m, bufi;
 
@@ -274,7 +276,7 @@ func_static byte bytemap[MAXNUMBYTES];   // Maps [0, bytemaplen) to [lo, hi]
 
 // build_bytemap(), below, initializes bytemap[], above.
 
-func_static void build_bytemap(byte *map, int len, byte lo, byte hi)
+func_static void build_bytemap(byte *map, int len __unused__, byte lo, byte hi)
 {
     int bufi;
     byte c;
