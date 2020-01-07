@@ -79,3 +79,4 @@ source/tests/summarize_results
 source/tests/Makefile
 source/tests/cmake_install.cmake
 source/tests/CMakeCache.txt
+source/.vscode/settings.json
