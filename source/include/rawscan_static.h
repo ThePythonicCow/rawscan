@@ -313,6 +313,11 @@ typedef struct RAWSCAN {
     const char *end_this_chunk;  // ptr to last byte in this line/chunk
     const char *next_val_p;      // start next chunk/line (or rsp->q if none)
 
+    // cache one next_delim_ptr ahead if in fast loop, to
+    // optimize returning many short lines from one buffer read
+
+    const char *next_delim_ptr_peek;
+
     RAWSCAN_RESULT result;  // rs_getline() returns a copy of this result
 
     char delimiterbyte;     // byte @ end of "lines" (e.g. '\n' or '\0')
@@ -406,7 +411,8 @@ func_static RAWSCAN *rs_open (
 
     buftop = (char *)start_our_pages + 1*pgsz + buffer_pg_size_in_bytes;
     assert(buftop == (char *)new_sbrk - 1*pgsz);
-    *buftop = delimiterbyte;
+    buftop[0] = delimiterbyte;
+    buftop[1] = '\0';   // guard rail for functions of nul-terminated strings
     buf = buftop - bufsz;
 
     // Protect our sentinel delimiterbyte from stray writes:
@@ -427,6 +433,7 @@ func_static RAWSCAN *rs_open (
     rsp->bufsz = bufsz;
     rsp->min1stchunklen = bufsz;
     rsp->delimiterbyte = delimiterbyte;
+    rsp->next_delim_ptr_peek = rsp->buftop;
 
     // Above memset() handles following:
     // rsp->end_this_chunk = NULL;
@@ -756,8 +763,31 @@ static RAWSCAN_RESULT rawscan_handle_end_of_longline(RAWSCAN *rsp)
 }
 
 func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp) __attribute__ ((hot));
+static RAWSCAN_RESULT rs_getline_morecode (RAWSCAN *rsp);
 
 func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
+{
+    // Optimized for short lines in long buffer.
+
+#   define likely(x)     __builtin_expect((x), 1)
+
+    if (likely(rsp->p <= rsp->next_delim_ptr_peek &&
+        rsp->next_delim_ptr_peek < rsp->q)) {
+
+            assert(rsp->result.type == rt_full_line);
+            assert(rsp->next_delim_ptr_peek < rsp->buftop);
+
+            rsp->result.line.begin = rsp->p;
+            rsp->result.line.end = rsp->next_delim_ptr_peek;
+            rsp->p = rsp->next_delim_ptr_peek + 1;
+            rsp->next_delim_ptr_peek = (const char *)rawmemchr(rsp->p,
+                                                    rsp->delimiterbyte);
+            return rsp->result;
+    }
+    return rs_getline_morecode(rsp);
+}
+
+static RAWSCAN_RESULT rs_getline_morecode (RAWSCAN *rsp)
 {
     const char *next_delim_ptr;
     const char *start_next_rawmemchr_here;
@@ -772,6 +802,9 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
             goto slow_loop;
         }
     }
+
+    // Disables "peek".  Only successful fast_loop re-enables.
+    rsp->next_delim_ptr_peek = rsp->buftop;
 
     start_next_rawmemchr_here = rsp->p;
 
@@ -795,6 +828,11 @@ func_static RAWSCAN_RESULT rs_getline (RAWSCAN *rsp)
             rsp->result.line.begin = rsp->p;
             rsp->result.line.end = next_delim_ptr;
             rsp->p = next_delim_ptr + 1;
+
+            // If there is another delimiter between rsp->p and rsp->q,
+            // then the next line will re-enable above "peek" code.
+            rsp->next_delim_ptr_peek = (const char *)rawmemchr(rsp->p,
+                                                rsp->delimiterbyte);
             return rsp->result;
         } else if (rsp->q < rsp->buftop) {
             // have space above q: read more and try again
