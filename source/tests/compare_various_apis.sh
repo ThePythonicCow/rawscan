@@ -196,12 +196,12 @@ function run_test()
                         cat $shm.1 | run_test  rawscan_static_test &
                         cat $shm.1 | run_test  getline_test &
                         cat $shm.1 | run_test  fgets_test &
-                        # cat $shm.1 | run_test  grep '^abc' &
-                        # cat $shm.1 | run_test  sed -n '/^abc/p' &
-                        # cat $shm.1 | run_test  $rust_bufreader &
-                        # cat $shm.1 | run_test  python2 python2_test &
-                        # cat $shm.1 | run_test  python3 python3_test &
-                        # cat $shm.1 | run_test  awk '/^abc/' &
+                        cat $shm.1 | run_test  grep '^abc' &
+                        cat $shm.1 | run_test  sed -n '/^abc/p' &
+                        cat $shm.1 | run_test  $rust_bufreader &
+                        cat $shm.1 | run_test  python2 python2_test &
+                        cat $shm.1 | run_test  python3 python3_test &
+                        cat $shm.1 | run_test  awk '/^abc/' &
                         wait
                     ) | cat > /dev/null
                 ) 2>&1 |
