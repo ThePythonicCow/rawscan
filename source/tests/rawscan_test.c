@@ -50,6 +50,7 @@ func_static void rawscan_test(int fd, size_t bufsz)
     bool good_long_line = false;
     const char *abc_pattern = "abc";
     const int abc_len = strlen(abc_pattern);
+    typedef unsigned short ushort;
 
     if ((rsp = rs_open(fd, bufsz, '\n')) == NULL)
         error_exit("rawscan rs_open memory allocation failure");
@@ -63,11 +64,25 @@ func_static void rawscan_test(int fd, size_t bufsz)
         switch (rt.type) {
             case rt_full_line:
             case rt_full_line_without_eol:
-                if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+                // rust "str.starts_with()" is faster than C "strncmp()",
+                // so to beat rust_bstr on many short lines (65536 lines
+                // of 8 chars plus '\n') I had to replace the two strncmp()
+                // tests below with an unsigned short cast hack, only good
+                // as coded on architectures that support unaligned memory
+                // access, when matching 3 byte patterns.
+
+                // if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+
+                if (*(ushort *)(rt.line.begin) == *(ushort *)(abc_pattern) &&
+                                        rt.line.begin[2] == abc_pattern[2])
                     emit(rt);
                 break;
             case rt_start_longline:
-                if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+
+                // if (strncmp(rt.line.begin, abc_pattern, abc_len) == 0)
+
+                if (*(ushort *)(rt.line.begin) == *(ushort *)(abc_pattern) &&
+                                        rt.line.begin[2] == abc_pattern[2])
                    good_long_line = true;
                 // fall through ...
             case rt_within_longline:
