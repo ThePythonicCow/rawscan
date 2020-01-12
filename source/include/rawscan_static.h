@@ -18,17 +18,12 @@
  *  2) The "faster" way, in which the using application only needs
  *     to include this present file, "rawscan_static.h".  As you can
  *     see below, this file contains the actual implementations.
- *     Compared to a "normal" dynamic linking, this "static"
- *     linking shaves about 1 to 5 per-cent off the runtime cost
- *     (user CPU cycles) of using this library, thanks to the more
- *     aggressive (if using -O3) optimizations that gcc can do, when
- *     calling into "static" subroutines in the same source file as
- *     the caller.  Gcc can drop all pretense of providing externally
- *     callable entry points for "static" subroutines in same source
- *     file, which enables it to shave cycles off their invocation.
- *     This "static" linking does however add roughly 4000 bytes to
- *     the size of the applications executable binary text segment.
  *
+ * The rawscan project README.md file provides performance
+ * measurement results, comparing these two ways of using rawscan,
+ * and also comparing rawscan with other common line scanning
+ * options.
+ * 
  * Don't worry about code duplication of the implementation of
  * the rawscan library routines.  The one and only implementation
  * appears below in this "rawscan_static.h" header file.  The file
