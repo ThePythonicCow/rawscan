@@ -44,7 +44,7 @@ in a more accessible manner, using NumPy and JupyterLab.
 This rawscan project is seeking multiple goals for me:
 
   1. Providing a useful text line reader for some useful C/Linux commandline tools I intend to polish up and publish.
-  2. A project to shape my learning (or re-leaning) of such tech as tech as git, cmake, Python, NumPy, and JupyterLab.
+  2. A project to shape my learning (or re-leaning) of such tech as git, cmake, Python, NumPy, and JupyterLab.
   3. A set of well done C/Linux tools that I can rework in Rust, to learn and contribute to that language.
 
 ## Now to return to our regularly scheduled Rawscan Broadcast
